@@ -2,32 +2,16 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
-  BadgeCheck,
   BookOpen,
-  Building2,
   CheckCircle2,
-  Command,
-  DatabaseZap,
   Edit3,
-  FileStack,
   FileText,
-  Gauge,
   KeyRound,
-  Layers3,
-  LockKeyhole,
   LogOut,
   Mail,
-  MessageSquare,
-  PanelRightOpen,
-  Rocket,
-  ScrollText,
   Search,
-  ShieldCheck,
-  Sparkles,
   UserCheck,
   UserPlus,
-  UsersRound,
-  Workflow,
 } from 'lucide-react'
 import './App.css'
 
@@ -93,56 +77,46 @@ const roleDescriptions: Record<UserRole, string> = {
 
 const featureCards = [
   {
-    icon: DatabaseZap,
-    title: 'Ответы из опубликованной базы',
+    title: 'Статьи в одном месте',
     description:
-      'RAG-слой опирается на статьи, владельцев, теги и права доступа, а не на случайные заметки из чатов.',
+      'Инструкции, регламенты и ответы на частые вопросы хранятся в общей базе. У каждой страницы есть владелец и дата обновления.',
   },
   {
-    icon: LockKeyhole,
-    title: 'Права видны до действия',
+    title: 'Быстрый поиск',
     description:
-      'Пользователь сразу понимает, может ли он читать, править или управлять публикацией конкретной страницы.',
+      'Можно найти материал по названию, разделу, тегу или владельцу. В демо поиск открывается кнопкой или через ⌘K.',
   },
   {
-    icon: Workflow,
-    title: 'Контент проходит понятный путь',
+    title: 'Права без путаницы',
     description:
-      'Черновик, ревью и публикация остаются в одном интерфейсе, без отдельной таблицы с владельцами.',
+      'Читатель открывает статьи, редактор обновляет материалы, администратор управляет ролями и публикацией.',
   },
 ]
 
 const productStats = [
   {
-    value: '3 роли',
-    label: 'читатель, редактор и администратор',
-  },
-  {
     value: '⌘K',
     label: 'поиск по статьям, тегам и владельцам',
   },
   {
-    value: '4 потока',
-    label: 'чтение, поиск, редактура и доступы',
+    value: '3 роли',
+    label: 'читатель, редактор и администратор',
   },
 ]
 
-const productTeams = ['Engineering', 'Support', 'Operations', 'HR', 'Legal']
+const productTeams = ['Разработка', 'Поддержка', 'Операции', 'HR', 'Юристы']
 
 const accessModes = [
   {
-    icon: UsersRound,
-    title: 'Reader',
+    title: 'Читатель',
     description: 'Открывает статьи, ищет ответы и видит владельца материала.',
   },
   {
-    icon: ScrollText,
-    title: 'Editor',
-    description: 'Обновляет закреплённые разделы, черновики и регламенты команды.',
+    title: 'Редактор',
+    description: 'Создаёт и обновляет статьи, которые относятся к его команде.',
   },
   {
-    icon: BadgeCheck,
-    title: 'Admin',
+    title: 'Администратор',
     description: 'Управляет публикацией, ролями и структурой базы знаний.',
   },
 ]
@@ -185,7 +159,7 @@ const editorAccess: EditorAccess[] = [
 const knowledgeArticles: KnowledgeArticle[] = [
   {
     id: 'intro',
-    group: 'Get started',
+    group: 'Начало',
     title: 'Введение в базу знаний',
     description:
       'Короткое описание того, как команда хранит регламенты, инструкции и владельцев материалов.',
@@ -222,7 +196,7 @@ const knowledgeArticles: KnowledgeArticle[] = [
   },
   {
     id: 'editor-access',
-    group: 'Access',
+    group: 'Доступы',
     title: 'Кто может редактировать',
     description:
       'Список ролей и людей, которым разрешено менять контент базы знаний.',
@@ -258,10 +232,10 @@ const knowledgeArticles: KnowledgeArticle[] = [
   },
   {
     id: 'search',
-    group: 'Optimize',
+    group: 'Поиск',
     title: 'Поиск и быстрые ответы',
     description:
-      'Поведение поиска, подсказок и будущего RAG-слоя для базы знаний.',
+      'Как искать статьи и получать короткие ответы по материалам базы.',
     owner: 'Демо редактор',
     updated: '08.05.2026',
     access: ['editor', 'admin'],
@@ -276,7 +250,7 @@ const knowledgeArticles: KnowledgeArticle[] = [
       {
         heading: 'Ответы поверх базы',
         paragraphs: [
-          'RAG-слой сможет использовать найденные страницы как контекст и возвращать короткий ответ со ссылками на первоисточники.',
+          'Ответ собирается по найденным страницам и показывает, на какие материалы он опирается.',
         ],
       },
       {
@@ -289,7 +263,7 @@ const knowledgeArticles: KnowledgeArticle[] = [
   },
   {
     id: 'publishing',
-    group: 'Create content',
+    group: 'Материалы',
     title: 'Публикация статьи',
     description:
       'Минимальный процесс подготовки материала от черновика до опубликованной страницы.',
@@ -496,14 +470,13 @@ function LandingPage({ currentUser, onOpenAuth, onOpenDocs }: LandingPageProps) 
         <div className="hero-shell">
           <div className="hero-copy">
             <a className="release-pill" href="#capabilities">
-              <Sparkles aria-hidden="true" size={16} />
-              Product-ready knowledge layer
+              База знаний для команды
             </a>
             <h1>RAG Base</h1>
             <p className="hero-lead">
-              Корпоративная база знаний с авторизацией, ролями редакторов,
-              быстрым поиском и интерфейсом документации, который выглядит как
-              готовый продукт.
+              Сервис помогает собрать инструкции и регламенты в одном месте.
+              Сотрудники быстро находят нужную статью, редакторы обновляют
+              материалы, а администраторы управляют доступами.
             </p>
 
             <div className="hero-actions">
@@ -516,24 +489,14 @@ function LandingPage({ currentUser, onOpenAuth, onOpenDocs }: LandingPageProps) 
                 <ArrowRight aria-hidden="true" size={18} />
               </button>
               <a className="secondary-button large" href="#capabilities">
-                <Layers3 aria-hidden="true" size={18} />
-                <span>Разобрать продукт</span>
+                <span>Что внутри</span>
               </a>
             </div>
 
             <div className="trust-row" aria-label="Ключевые возможности">
-              <span>
-                <CheckCircle2 aria-hidden="true" size={16} />
-                Без тяжёлой CMS
-              </span>
-              <span>
-                <ShieldCheck aria-hidden="true" size={16} />
-                Роли на уровне страниц
-              </span>
-              <span>
-                <Command aria-hidden="true" size={16} />
-                Командный поиск
-              </span>
+              <span>Инструкции и регламенты</span>
+              <span>Поиск по материалам</span>
+              <span>Роли для чтения и правок</span>
             </div>
           </div>
 
@@ -546,18 +509,18 @@ function LandingPage({ currentUser, onOpenAuth, onOpenDocs }: LandingPageProps) 
               </div>
               <div className="preview-search">
                 <Search aria-hidden="true" size={15} />
-                <span>Search docs, owners, access rules...</span>
+                <span>Найти статью, владельца или роль...</span>
                 <kbd>⌘K</kbd>
               </div>
               <div className="preview-status">
                 <span aria-hidden="true"></span>
-                Live demo
+                Демо
               </div>
             </div>
 
             <div className="docs-preview-grid">
               <aside className="preview-sidebar">
-                <span className="sidebar-label">Workspace</span>
+                <span className="sidebar-label">Разделы</span>
                 {docSections.map((section, index) => (
                   <button
                     className={index === 1 ? 'active nav-row' : 'nav-row'}
@@ -572,17 +535,16 @@ function LandingPage({ currentUser, onOpenAuth, onOpenDocs }: LandingPageProps) 
 
               <article className="preview-article">
                 <div className="doc-chip-row">
-                  <span>Published</span>
-                  <span>Owner: content team</span>
+                  <span>Опубликовано</span>
+                  <span>Владелец: контент</span>
                 </div>
-                <span className="eyebrow">Release operations</span>
-                <h2>Регламент релиза продукта</h2>
+                <span className="eyebrow">Регламент</span>
+                <h2>Релиз продукта</h2>
                 <p>
-                  Статья связывает чеклист команды, роли редакторов и быстрый
-                  ответ для тех, кто открывает документ за минуту до релиза.
+                  На странице есть чеклист, ответственный за процесс и короткий
+                  ответ для тех, кто открывает документ перед релизом.
                 </p>
                 <div className="answer-panel">
-                  <MessageSquare aria-hidden="true" size={18} />
                   <div>
                     <strong>Ответ из базы</strong>
                     <span>Релиз утверждает администратор раздела после ревью владельца.</span>
@@ -596,18 +558,15 @@ function LandingPage({ currentUser, onOpenAuth, onOpenDocs }: LandingPageProps) 
               </article>
 
               <aside className="preview-inspector">
-                <span className="sidebar-label">Access</span>
+                <span className="sidebar-label">Доступ</span>
                 <div className="inspector-row success">
-                  <ShieldCheck aria-hidden="true" size={16} />
-                  <span>Editor can update</span>
+                  <span>Редактор может обновлять</span>
                 </div>
                 <div className="inspector-row">
-                  <PanelRightOpen aria-hidden="true" size={16} />
-                  <span>3 linked docs</span>
+                  <span>3 связанные статьи</span>
                 </div>
                 <div className="inspector-row">
-                  <Gauge aria-hidden="true" size={16} />
-                  <span>Updated today</span>
+                  <span>Обновлено сегодня</span>
                 </div>
               </aside>
             </div>
@@ -635,110 +594,75 @@ function LandingPage({ currentUser, onOpenAuth, onOpenDocs }: LandingPageProps) 
 
       <section className="feature-section" id="capabilities">
         <div className="section-heading section-heading-wide">
-          <span className="eyebrow">Product surface</span>
-          <h2>Лендинг продаёт продукт, а не обещание “когда-нибудь будет”</h2>
+          <span className="eyebrow">Что делает продукт</span>
+          <h2>Помогает хранить знания команды и быстро находить нужное</h2>
           <p>
-            Первый экран показывает реальную рабочую область: поиск, статью,
-            оглавление, владельца и доступы. Ниже — те же функции разложены как
-            продуктовые сценарии.
+            Это небольшая база знаний с ролями. В ней удобно собрать рабочие
+            материалы, открыть доступ команде и не искать важные инструкции в
+            переписках.
           </p>
         </div>
 
         <div className="bento-grid">
           <article className="bento-card bento-card-large">
-            <span className="feature-icon warm">
-              <FileStack aria-hidden="true" size={20} />
-            </span>
-            <h3>Структура документации уже похожа на production docs</h3>
+            <h3>Документы остаются понятными</h3>
             <p>
-              Разделы, владельцы и даты обновления не спрятаны в админке:
-              пользователь видит контекст прямо на странице статьи.
+              На странице видно, о чём материал, кто за него отвечает и когда
+              его обновляли. Так проще понять, можно ли доверять инструкции.
             </p>
             <div className="knowledge-stack" aria-label="Слои базы знаний">
-              <span>
-                <BookOpen aria-hidden="true" size={15} />
-                Published docs
-              </span>
-              <span>
-                <Building2 aria-hidden="true" size={15} />
-                Team ownership
-              </span>
-              <span>
-                <Rocket aria-hidden="true" size={15} />
-                Release flow
-              </span>
+              <span>Статьи</span>
+              <span>Владельцы</span>
+              <span>Публикация</span>
             </div>
           </article>
 
-          {featureCards.map((feature) => {
-            const Icon = feature.icon
-
-            return (
-              <article className="bento-card feature-card" key={feature.title}>
-                <span className="feature-icon">
-                  <Icon aria-hidden="true" size={20} />
-                </span>
-                <h3>{feature.title}</h3>
-                <p>{feature.description}</p>
-              </article>
-            )
-          })}
+          {featureCards.map((feature) => (
+            <article className="bento-card feature-card" key={feature.title}>
+              <h3>{feature.title}</h3>
+              <p>{feature.description}</p>
+            </article>
+          ))}
         </div>
       </section>
 
       <section className="access-section" id="access">
         <div className="section-heading">
-          <span className="eyebrow">Access model</span>
-          <h2>Роли не выглядят как техническая заглушка</h2>
+          <span className="eyebrow">Доступы</span>
+          <h2>Каждый видит только то, что ему можно делать</h2>
           <p>
-            Лендинг объясняет, зачем нужны уровни доступа, а интерфейс после
-            входа сразу применяет выбранную роль в базе знаний.
+            Роль выбирается при входе. Она влияет на то, можно ли редактировать
+            статью, публиковать материалы и менять права других пользователей.
           </p>
         </div>
 
         <div className="access-grid">
-          {accessModes.map((mode) => {
-            const Icon = mode.icon
-
-            return (
-              <article className="access-mode" key={mode.title}>
-                <span>
-                  <Icon aria-hidden="true" size={20} />
-                </span>
-                <h3>{mode.title}</h3>
-                <p>{mode.description}</p>
-              </article>
-            )
-          })}
+          {accessModes.map((mode) => (
+            <article className="access-mode" key={mode.title}>
+              <h3>{mode.title}</h3>
+              <p>{mode.description}</p>
+            </article>
+          ))}
         </div>
       </section>
 
       <section className="workflow-section" id="start">
         <div className="workflow-panel">
           <div className="workflow-copy">
-            <span className="eyebrow">Go live</span>
+            <span className="eyebrow">Демо</span>
             <h2>После входа пользователь сразу попадает в рабочую базу</h2>
             <p>
-              В демо можно пройти регистрацию, выбрать роль и проверить, как
-              меняются права в документации.
+              Можно выбрать роль, открыть статью, найти материал через поиск и
+              посмотреть, какие действия доступны.
             </p>
           </div>
           <div className="workflow-steps" aria-label="Путь пользователя">
-            <span>
-              <UsersRound aria-hidden="true" size={16} />
-              Sign in
-            </span>
-            <span>
-              <Search aria-hidden="true" size={16} />
-              Find answer
-            </span>
-            <span>
-              <ShieldCheck aria-hidden="true" size={16} />
-              Respect access
-            </span>
+            <span>Войти</span>
+            <span>Найти статью</span>
+            <span>Проверить доступ</span>
           </div>
           <button className="primary-button" onClick={() => onOpenAuth('signin')} type="button">
-            <span>Перейти к входу</span>
+            <span>Открыть демо</span>
             <ArrowRight aria-hidden="true" size={16} />
           </button>
         </div>
@@ -777,7 +701,7 @@ function AuthScreen({
             <span>Вернуться на лендинг</span>
           </button>
 
-          <span className="eyebrow">Access layer</span>
+          <span className="eyebrow">Вход</span>
           <h1 id="auth-title">
             {isSignup ? 'Создайте рабочий доступ' : 'Войдите в базу знаний'}
           </h1>
@@ -978,7 +902,7 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
         <aside className="docs-sidebar" aria-label="Навигация базы знаний">
           <button className="docs-search-button" onClick={() => setSearchOpen(true)} type="button">
             <Search aria-hidden="true" size={16} />
-            <span>Search or ask...</span>
+            <span>Поиск или вопрос...</span>
             <kbd>⌘K</kbd>
           </button>
 
@@ -1009,7 +933,7 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
           </div>
 
           <header className="doc-header">
-            <span className="eyebrow">Knowledge base</span>
+            <span className="eyebrow">База знаний</span>
             <h1>{selectedArticle.title}</h1>
             <p>{selectedArticle.description}</p>
 
@@ -1057,7 +981,7 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
 
         <aside className="docs-aside" aria-label="Оглавление и права">
           <div className="toc-card">
-            <span className="sidebar-label">On this page</span>
+            <span className="sidebar-label">На странице</span>
             {selectedArticle.sections.map((section, index) => (
               <a href={`#section-${index}`} key={section.heading}>
                 {section.heading}
@@ -1066,7 +990,7 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
           </div>
 
           <div className={canEdit ? 'access-card editable' : 'access-card readonly'}>
-            <span className="sidebar-label">Editing access</span>
+            <span className="sidebar-label">Права на правку</span>
             <h3>{canEdit ? 'Можно редактировать' : 'Только чтение'}</h3>
             <p>
               Ваша роль: {roleLabels[currentUser.role]}. Владелец страницы:
