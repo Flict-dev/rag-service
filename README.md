@@ -30,12 +30,14 @@ npm run dev
 npm run build
 npm run seed
 npm run backend:dev
+npm run db:upgrade
 ```
 
 - `dev` запускает frontend и backend вместе.
 - `backend:dev` запускает только FastAPI backend.
 - `build` собирает frontend и проверяет Python backend через `compileall`.
 - `seed` пересоздаёт демо-роли, пользователей и статьи в SQLite.
+- `db:upgrade` применяет Alembic-миграции к `DATABASE_URL`.
 
 ## Демо-вход
 
@@ -54,6 +56,7 @@ Backend проверяет пароль по PBKDF2-хэшу. Пароль де�
 - `HOST` задаёт host для локального FastAPI-сервера.
 - `CORS_ORIGIN` ограничивает frontend-origin для backend.
 - `DB_PATH` задаёт путь к SQLite-файлу.
+- `DATABASE_URL` задаёт SQLAlchemy/Alembic подключение; для PostgreSQL используйте `postgresql+psycopg://...`.
 - `VITE_API_URL` задаёт backend URL для frontend.
 
 ## Troubleshooting

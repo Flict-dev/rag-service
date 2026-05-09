@@ -19,6 +19,7 @@ class Settings(BaseModel):
     host: str = Field(default_factory=lambda: os.getenv("HOST", "127.0.0.1"))
     port: int = Field(default_factory=lambda: _read_int("PORT", 4000))
     cors_origin: str = Field(default_factory=lambda: os.getenv("CORS_ORIGIN", "*"))
+    database_url_override: str | None = Field(default_factory=lambda: os.getenv("DATABASE_URL"))
     database_path: Path = Field(
         default_factory=lambda: Path(
             os.getenv("DB_PATH", str(BACKEND_DIR / "data" / "rag-base.sqlite"))
@@ -29,6 +30,13 @@ class Settings(BaseModel):
     def allowed_origins(self) -> list[str]:
         origins = [origin.strip() for origin in self.cors_origin.split(",") if origin.strip()]
         return origins or ["*"]
+
+    @property
+    def database_url(self) -> str:
+        if self.database_url_override:
+            return self.database_url_override
+
+        return f"sqlite:///{self.database_path.as_posix()}"
 
 
 @lru_cache
