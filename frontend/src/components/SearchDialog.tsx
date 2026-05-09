@@ -1,13 +1,33 @@
-import { ArrowRight, Search } from 'lucide-react'
-import type { KnowledgeArticle } from '../types'
+import { ArrowRight, Lightbulb, Search } from 'lucide-react'
+import type { ArticleSearchResult, HighlightSegment } from '../lib/search'
 
 type SearchDialogProps = {
   query: string
-  results: KnowledgeArticle[]
+  results: ArticleSearchResult[]
   selectedArticleId: string
   onClose: () => void
   onQueryChange: (query: string) => void
   onSelect: (articleId: string) => void
+}
+
+const quickSearchTips = ['поиск', 'публикация', 'доступ', 'владелец']
+
+type HighlightedTextProps = {
+  segments: HighlightSegment[]
+}
+
+function HighlightedText({ segments }: HighlightedTextProps) {
+  return (
+    <>
+      {segments.map((segment, index) =>
+        segment.highlighted ? (
+          <mark key={`${segment.text}-${index}`}>{segment.text}</mark>
+        ) : (
+          <span key={`${segment.text}-${index}`}>{segment.text}</span>
+        ),
+      )}
+    </>
+  )
 }
 
 function SearchDialog({
@@ -18,6 +38,8 @@ function SearchDialog({
   onQueryChange,
   onSelect,
 }: SearchDialogProps) {
+  const queryIsEmpty = query.trim().length === 0
+
   return (
     <div className="search-overlay" role="presentation">
       <div aria-modal="true" className="search-dialog" role="dialog">
@@ -36,17 +58,40 @@ function SearchDialog({
         </div>
 
         <div className="search-results">
-          {results.length > 0 ? (
-            results.map((article) => (
+          {queryIsEmpty ? (
+            <div className="search-tips">
+              <Lightbulb aria-hidden="true" size={18} />
+              <strong>Начните с быстрого запроса</strong>
+              <div>
+                {quickSearchTips.map((tip) => (
+                  <button key={tip} onClick={() => onQueryChange(tip)} type="button">
+                    {tip}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : results.length > 0 ? (
+            results.map((result) => (
               <button
-                className={article.id === selectedArticleId ? 'active' : ''}
-                key={article.id}
-                onClick={() => onSelect(article.id)}
+                className={
+                  result.article.id === selectedArticleId
+                    ? 'search-result-button active'
+                    : 'search-result-button'
+                }
+                key={result.article.id}
+                onClick={() => onSelect(result.article.id)}
                 type="button"
               >
                 <span>
-                  <strong>{article.title}</strong>
-                  <small>{article.group}</small>
+                  <strong>
+                    <HighlightedText segments={result.title} />
+                  </strong>
+                  <small>
+                    {result.article.group} · {result.matchLabel}
+                  </small>
+                  <span className="search-snippet">
+                    <HighlightedText segments={result.snippet} />
+                  </span>
                 </span>
                 <ArrowRight aria-hidden="true" size={16} />
               </button>
@@ -54,7 +99,14 @@ function SearchDialog({
           ) : (
             <div className="empty-search">
               <strong>Ничего не найдено</strong>
-              <span>Попробуйте запрос вроде “доступ”, “поиск” или “публикация”.</span>
+              <span>Проверьте формулировку или роль доступа к материалам.</span>
+              <div>
+                {quickSearchTips.map((tip) => (
+                  <button key={tip} onClick={() => onQueryChange(tip)} type="button">
+                    {tip}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>

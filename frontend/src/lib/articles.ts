@@ -11,21 +11,6 @@ export function groupArticlesByGroup(articles: KnowledgeArticle[]) {
   }, {})
 }
 
-export function searchArticles(articles: KnowledgeArticle[], query: string) {
-  const normalizedQuery = query.trim().toLowerCase()
-
-  if (!normalizedQuery) {
-    return articles
-  }
-
-  return articles.filter((article) =>
-    [article.title, article.description, article.group, article.owner, article.tags.join(' ')]
-      .join(' ')
-      .toLowerCase()
-      .includes(normalizedQuery),
-  )
-}
-
 export function formatArticleDate(value: string) {
   const date = new Date(value)
 

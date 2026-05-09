@@ -4,7 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import ArticleEditorForm from '../components/ArticleEditorForm'
 import SearchDialog from '../components/SearchDialog'
 import { articleStatusLabels, editorAccess, roleLabels } from '../data/demoData'
-import { formatArticleDate, groupArticlesByGroup, searchArticles } from '../lib/articles'
+import { formatArticleDate, groupArticlesByGroup } from '../lib/articles'
+import { searchArticles } from '../lib/search'
 import type { CurrentUser, KnowledgeArticle } from '../types'
 
 type EditorMode = 'view' | 'edit' | 'create'
@@ -81,7 +82,10 @@ function DocsScreen({
     () => [...new Set(articles.map((article) => article.group))],
     [articles],
   )
-  const searchResults = useMemo(() => searchArticles(articles, searchQuery), [articles, searchQuery])
+  const searchResults = useMemo(
+    () => searchArticles(articles, searchQuery, currentUser.role),
+    [articles, currentUser.role, searchQuery],
+  )
 
   const canCreate = canCreateArticles(currentUser)
   const canEdit =
