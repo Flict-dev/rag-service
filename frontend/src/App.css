@@ -151,6 +151,13 @@
   transform: translateY(-1px);
 }
 
+.primary-button:disabled,
+.secondary-button:disabled {
+  opacity: 0.62;
+  cursor: wait;
+  transform: none;
+}
+
 .secondary-button {
   border: 1px solid rgba(24, 24, 21, 0.18);
   background: #ffffff;
@@ -846,6 +853,17 @@ kbd {
   margin-top: 22px;
 }
 
+.auth-error {
+  padding: 11px 12px;
+  border: 1px solid #efc8c4;
+  border-radius: 8px;
+  background: #fff5f2;
+  color: #7d261d;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .field-label {
   display: grid;
   gap: 8px;
@@ -980,6 +998,19 @@ kbd {
 .docs-app {
   min-height: calc(100vh - 72px);
   background: #ffffff;
+}
+
+.docs-state-banner {
+  width: min(1340px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 10px 0;
+  color: #174ea6;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.docs-state-banner.error {
+  color: #8b2f24;
 }
 
 .docs-layout {

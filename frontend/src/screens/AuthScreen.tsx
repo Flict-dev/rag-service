@@ -14,6 +14,8 @@ import type { AuthMode, CurrentUser, UserRole } from '../types'
 type AuthScreenProps = {
   authMode: AuthMode
   currentUser: CurrentUser | null
+  error?: string | null
+  isSubmitting?: boolean
   selectedRole: UserRole
   onAuthModeChange: (mode: AuthMode) => void
   onBack: () => void
@@ -24,6 +26,8 @@ type AuthScreenProps = {
 function AuthScreen({
   authMode,
   currentUser,
+  error,
+  isSubmitting = false,
   selectedRole,
   onAuthModeChange,
   onBack,
@@ -172,8 +176,12 @@ function AuthScreen({
               </fieldset>
             )}
 
-            <button className="primary-button wide" type="submit">
-              <span>{isSignup ? 'Создать доступ' : 'Войти в демо'}</span>
+            {error && <div className="auth-error">{error}</div>}
+
+            <button className="primary-button wide" disabled={isSubmitting} type="submit">
+              <span>
+                {isSubmitting ? 'Подключаемся...' : isSignup ? 'Создать доступ' : 'Войти в демо'}
+              </span>
               <ArrowRight aria-hidden="true" size={17} />
             </button>
           </form>

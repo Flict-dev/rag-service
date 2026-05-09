@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
+import { createApiArticle, deleteApiArticle, fetchApiArticles, updateApiArticle } from './api/articles'
+import { loginApi } from './api/auth'
 import Topbar from './components/Topbar'
 import { demoUsers } from './data/demoData'
 import {
@@ -8,7 +10,6 @@ import {
   resetArticles as resetStoredArticles,
   saveArticles,
 } from './lib/articleStore'
-import { fetchApiArticles } from './lib/api'
 import { clearCurrentUser, loadCurrentUser, saveCurrentUser } from './lib/storage'
 import AuthScreen from './screens/AuthScreen'
 import DocsScreen from './screens/DocsScreen'
@@ -27,6 +28,10 @@ function App() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('editor')
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => loadCurrentUser())
   const [articles, setArticles] = useState(() => loadArticles())
+  const [articlesLoading, setArticlesLoading] = useState(false)
+  const [articlesError, setArticlesError] = useState<string | null>(null)
+  const [authSubmitting, setAuthSubmitting] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -41,15 +46,35 @@ function App() {
 
     let ignoreResult = false
 
-    fetchApiArticles(currentUser)
-      .then((apiArticles) => {
-        if (!ignoreResult) {
-          setArticles(apiArticles)
+    Promise.resolve()
+      .then(async () => {
+        if (ignoreResult) {
+          return
         }
-      })
-      .catch(() => {
-        if (!ignoreResult) {
+
+        setArticlesLoading(true)
+        setArticlesError(null)
+
+        try {
+          const apiArticles = await fetchApiArticles(currentUser)
+
+          if (ignoreResult) {
+            return
+          }
+
+          setArticles(apiArticles)
+          setArticlesError(null)
+        } catch {
+          if (ignoreResult) {
+            return
+          }
+
           setArticles(loadArticles())
+          setArticlesError('Backend недоступен, поэтому открыта локальная копия статей.')
+        }
+
+        if (!ignoreResult) {
+          setArticlesLoading(false)
         }
       })
 
@@ -83,7 +108,7 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleAuthSubmit = (authMode: AuthMode) => (event: FormEvent<HTMLFormElement>) => {
+  const handleAuthSubmit = (authMode: AuthMode) => async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const formData = new FormData(event.currentTarget)
@@ -95,15 +120,40 @@ function App() {
         ? String(formData.get('name') || 'Новый редактор')
         : selectedDemoUser.name
 
-    const nextUser: CurrentUser = {
-      id: authMode === 'signup' ? `local-${selectedRole}-${Date.now()}` : selectedDemoUser.id,
-      email,
-      name,
-      role: authMode === 'signup' ? selectedRole : selectedDemoUser.role,
-    }
+    setAuthSubmitting(true)
+    setAuthError(null)
 
-    saveCurrentUser(nextUser)
-    setCurrentUser(nextUser)
+    let nextUser: CurrentUser
+
+    try {
+      if (authMode === 'signin') {
+        const session = await loginApi({ email, role: selectedRole })
+        nextUser = session.user
+      } else {
+        nextUser = {
+          id: `local-${selectedRole}-${Date.now()}`,
+          email,
+          name,
+          role: selectedRole,
+        }
+      }
+
+      saveCurrentUser(nextUser)
+      setCurrentUser(nextUser)
+    } catch {
+      nextUser = {
+        id: authMode === 'signup' ? `local-${selectedRole}-${Date.now()}` : selectedDemoUser.id,
+        email,
+        name,
+        role: authMode === 'signup' ? selectedRole : selectedDemoUser.role,
+      }
+
+      saveCurrentUser(nextUser)
+      setCurrentUser(nextUser)
+      setAuthError('Backend недоступен, поэтому вход выполнен в демо-режиме.')
+    } finally {
+      setAuthSubmitting(false)
+    }
 
     const navigationState = location.state as NavigationState | null
     const from = navigationState?.from
@@ -118,6 +168,9 @@ function App() {
   const signOut = () => {
     clearCurrentUser()
     setCurrentUser(null)
+    setAuthError(null)
+    setArticlesError(null)
+    setArticlesLoading(false)
     navigate('/', { replace: true })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -128,7 +181,7 @@ function App() {
     return seedArticles
   }
 
-  const saveArticle = (article: KnowledgeArticle) => {
+  const saveArticleLocally = (article: KnowledgeArticle) => {
     setArticles((currentArticles) => {
       const articleExists = currentArticles.some((currentArticle) => currentArticle.id === article.id)
 
@@ -142,10 +195,49 @@ function App() {
     })
   }
 
-  const deleteArticle = (articleId: string) => {
+  const saveArticle = async (article: KnowledgeArticle) => {
+    if (!currentUser) {
+      saveArticleLocally(article)
+      return article
+    }
+
+    const articleExists = articles.some((currentArticle) => currentArticle.id === article.id)
+
+    try {
+      const savedArticle = articleExists
+        ? await updateApiArticle(currentUser, article)
+        : await createApiArticle(currentUser, article)
+
+      saveArticleLocally(savedArticle)
+      setArticlesError(null)
+      return savedArticle
+    } catch {
+      saveArticleLocally(article)
+      setArticlesError('Не удалось сохранить статью в backend, изменения оставлены локально.')
+      return article
+    }
+  }
+
+  const deleteArticleLocally = (articleId: string) => {
     setArticles((currentArticles) =>
       currentArticles.filter((currentArticle) => currentArticle.id !== articleId),
     )
+  }
+
+  const deleteArticle = async (articleId: string) => {
+    if (!currentUser) {
+      deleteArticleLocally(articleId)
+      return
+    }
+
+    try {
+      await deleteApiArticle(currentUser, articleId)
+      setArticlesError(null)
+    } catch {
+      setArticlesError('Не удалось удалить статью в backend, она удалена только локально.')
+    }
+
+    deleteArticleLocally(articleId)
   }
 
   return (
@@ -172,6 +264,8 @@ function App() {
               authMode="signin"
               currentUser={currentUser}
               selectedRole={selectedRole}
+              error={authError}
+              isSubmitting={authSubmitting}
               onAuthModeChange={switchAuthMode}
               onBack={openLanding}
               onRoleChange={setSelectedRole}
@@ -186,6 +280,8 @@ function App() {
               authMode="signup"
               currentUser={currentUser}
               selectedRole={selectedRole}
+              error={authError}
+              isSubmitting={authSubmitting}
               onAuthModeChange={switchAuthMode}
               onBack={openLanding}
               onRoleChange={setSelectedRole}
@@ -199,6 +295,8 @@ function App() {
             currentUser ? (
               <DocsScreen
                 articles={articles}
+                articlesError={articlesError}
+                articlesLoading={articlesLoading}
                 currentUser={currentUser}
                 onDeleteArticle={deleteArticle}
                 onResetArticles={resetArticles}
@@ -215,6 +313,8 @@ function App() {
             currentUser ? (
               <DocsScreen
                 articles={articles}
+                articlesError={articlesError}
+                articlesLoading={articlesLoading}
                 currentUser={currentUser}
                 onDeleteArticle={deleteArticle}
                 onResetArticles={resetArticles}

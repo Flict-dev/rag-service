@@ -23,10 +23,12 @@ type EditorState =
 
 type DocsScreenProps = {
   articles: KnowledgeArticle[]
+  articlesError?: string | null
+  articlesLoading?: boolean
   currentUser: CurrentUser
-  onDeleteArticle: (articleId: string) => void
+  onDeleteArticle: (articleId: string) => Promise<void> | void
   onResetArticles: () => KnowledgeArticle[]
-  onSaveArticle: (article: KnowledgeArticle) => void
+  onSaveArticle: (article: KnowledgeArticle) => Promise<KnowledgeArticle> | KnowledgeArticle
 }
 
 function slugifyArticleTitle(title: string) {
@@ -63,6 +65,8 @@ function canCreateArticles(currentUser: CurrentUser) {
 
 function DocsScreen({
   articles,
+  articlesError,
+  articlesLoading = false,
   currentUser,
   onDeleteArticle,
   onResetArticles,
@@ -162,7 +166,7 @@ function DocsScreen({
     setEditorState({ mode: 'view' })
   }
 
-  const submitArticle = (article: KnowledgeArticle, status: 'draft' | 'published') => {
+  const submitArticle = async (article: KnowledgeArticle, status: 'draft' | 'published') => {
     const now = todayIsoDate()
     const isNewArticle = !article.id
     const nextArticle: KnowledgeArticle = {
@@ -173,12 +177,12 @@ function DocsScreen({
       status,
     }
 
-    onSaveArticle(nextArticle)
+    const savedArticle = await onSaveArticle(nextArticle)
     setEditorState({ mode: 'view' })
-    navigate(`/docs/${nextArticle.id}`, { replace: !isNewArticle })
+    navigate(`/docs/${savedArticle.id}`, { replace: !isNewArticle })
   }
 
-  const deleteArticle = (articleIdToDelete: string) => {
+  const deleteArticle = async (articleIdToDelete: string) => {
     const articleToDelete = articles.find((article) => article.id === articleIdToDelete)
     const deletionConfirmed = window.confirm(
       `Удалить статью “${articleToDelete?.title ?? 'без названия'}”? Это действие нельзя отменить.`,
@@ -190,7 +194,7 @@ function DocsScreen({
 
     const nextArticle = articles.find((article) => article.id !== articleIdToDelete)
 
-    onDeleteArticle(articleIdToDelete)
+    await onDeleteArticle(articleIdToDelete)
     setEditorState({ mode: 'view' })
 
     if (nextArticle) {
@@ -223,6 +227,12 @@ function DocsScreen({
 
   return (
     <main className="docs-app">
+      {(articlesLoading || articlesError) && (
+        <div className={articlesError ? 'docs-state-banner error' : 'docs-state-banner'}>
+          {articlesError ?? 'Загружаем статьи из backend...'}
+        </div>
+      )}
+
       <div className="docs-layout">
         <aside className="docs-sidebar" aria-label="Навигация базы знаний">
           <button className="docs-search-button" onClick={() => setSearchOpen(true)} type="button">
