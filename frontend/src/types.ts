@@ -2,6 +2,7 @@ export type AuthMode = 'signin' | 'signup'
 export type UserRole = 'reader' | 'editor' | 'admin'
 
 export type CurrentUser = {
+  id: string
   name: string
   email: string
   role: UserRole

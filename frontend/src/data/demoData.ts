@@ -1,4 +1,4 @@
-import type { EditorAccess, KnowledgeArticle, NavItem, UserRole } from '../types'
+import type { CurrentUser, EditorAccess, KnowledgeArticle, NavItem, UserRole } from '../types'
 
 export const navItems: NavItem[] = [
   { label: 'Продукт', sectionId: 'home' },
@@ -18,6 +18,27 @@ export const roleDescriptions: Record<UserRole, string> = {
   editor: 'Может создавать и редактировать статьи.',
   admin: 'Может управлять ролями и публикацией.',
 }
+
+export const demoUsers: CurrentUser[] = [
+  {
+    id: 'demo-reader',
+    name: 'Демо читатель',
+    email: 'reader@ragbase.local',
+    role: 'reader',
+  },
+  {
+    id: 'demo-editor',
+    name: 'Демо редактор',
+    email: 'editor@ragbase.local',
+    role: 'editor',
+  },
+  {
+    id: 'demo-admin',
+    name: 'Демо администратор',
+    email: 'admin@ragbase.local',
+    role: 'admin',
+  },
+]
 
 export const featureCards = [
   {

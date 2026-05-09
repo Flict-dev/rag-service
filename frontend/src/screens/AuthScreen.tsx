@@ -8,7 +8,7 @@ import {
   UserCheck,
   UserPlus,
 } from 'lucide-react'
-import { authBenefits, roleDescriptions, roleLabels } from '../data/demoData'
+import { authBenefits, demoUsers, roleDescriptions, roleLabels } from '../data/demoData'
 import type { AuthMode, CurrentUser, UserRole } from '../types'
 
 type AuthScreenProps = {
@@ -31,6 +31,8 @@ function AuthScreen({
   onSubmit,
 }: AuthScreenProps) {
   const isSignup = authMode === 'signup'
+  const selectedDemoUser =
+    demoUsers.find((user) => user.role === selectedRole) ?? demoUsers[1]
 
   return (
     <main className="auth-page">
@@ -98,7 +100,8 @@ function AuthScreen({
               <span className="input-shell">
                 <Mail aria-hidden="true" size={18} />
                 <input
-                  defaultValue={isSignup ? '' : 'editor@ragbase.local'}
+                  defaultValue={isSignup ? '' : selectedDemoUser.email}
+                  key={isSignup ? 'signup-email' : selectedDemoUser.email}
                   name="email"
                   placeholder="you@company.ru"
                   type="email"
@@ -118,6 +121,32 @@ function AuthScreen({
                 />
               </span>
             </label>
+
+            {!isSignup && (
+              <fieldset className="role-fieldset">
+                <legend>Быстрый выбор демо-роли</legend>
+                {demoUsers.map((user) => (
+                  <label
+                    className={selectedRole === user.role ? 'role-option active' : 'role-option'}
+                    key={user.id}
+                  >
+                    <input
+                      checked={selectedRole === user.role}
+                      name="demoRole"
+                      onChange={() => onRoleChange(user.role)}
+                      type="radio"
+                      value={user.role}
+                    />
+                    <span>
+                      <strong>{roleLabels[user.role]}</strong>
+                      <small>
+                        {user.email} · {roleDescriptions[user.role]}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
 
             {isSignup && (
               <fieldset className="role-fieldset">

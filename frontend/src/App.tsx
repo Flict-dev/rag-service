@@ -2,6 +2,8 @@ import { type FormEvent, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import Topbar from './components/Topbar'
+import { demoUsers } from './data/demoData'
+import { clearCurrentUser, loadCurrentUser, saveCurrentUser } from './lib/storage'
 import AuthScreen from './screens/AuthScreen'
 import DocsScreen from './screens/DocsScreen'
 import LandingPage from './screens/LandingPage'
@@ -17,7 +19,7 @@ type NavigationState = {
 
 function App() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('editor')
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => loadCurrentUser())
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -50,17 +52,23 @@ function App() {
     event.preventDefault()
 
     const formData = new FormData(event.currentTarget)
-    const email = String(formData.get('email') || 'editor@ragbase.local')
+    const selectedDemoUser =
+      demoUsers.find((user) => user.role === selectedRole) ?? demoUsers[1]
+    const email = String(formData.get('email') || selectedDemoUser.email)
     const name =
       authMode === 'signup'
         ? String(formData.get('name') || 'Новый редактор')
-        : 'Демо редактор'
+        : selectedDemoUser.name
 
-    setCurrentUser({
+    const nextUser: CurrentUser = {
+      id: authMode === 'signup' ? `local-${selectedRole}-${Date.now()}` : selectedDemoUser.id,
       email,
       name,
-      role: authMode === 'signup' ? selectedRole : 'editor',
-    })
+      role: authMode === 'signup' ? selectedRole : selectedDemoUser.role,
+    }
+
+    saveCurrentUser(nextUser)
+    setCurrentUser(nextUser)
 
     const navigationState = location.state as NavigationState | null
     const from = navigationState?.from
@@ -73,6 +81,7 @@ function App() {
   }
 
   const signOut = () => {
+    clearCurrentUser()
     setCurrentUser(null)
     navigate('/', { replace: true })
     window.scrollTo({ top: 0, behavior: 'smooth' })
