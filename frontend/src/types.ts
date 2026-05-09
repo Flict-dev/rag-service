@@ -1,5 +1,6 @@
 export type AuthMode = 'signin' | 'signup'
 export type UserRole = 'reader' | 'editor' | 'admin'
+export type ArticleStatus = 'draft' | 'review' | 'published'
 
 export type CurrentUser = {
   id: string
@@ -20,7 +21,10 @@ export type KnowledgeArticle = {
   title: string
   description: string
   owner: string
-  updated: string
+  ownerId: string
+  createdAt: string
+  updatedAt: string
+  status: ArticleStatus
   access: UserRole[]
   tags: string[]
   sections: ArticleSection[]

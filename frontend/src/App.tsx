@@ -1,8 +1,13 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import Topbar from './components/Topbar'
 import { demoUsers } from './data/demoData'
+import {
+  loadArticles,
+  resetArticles as resetStoredArticles,
+  saveArticles,
+} from './lib/articleStore'
 import { clearCurrentUser, loadCurrentUser, saveCurrentUser } from './lib/storage'
 import AuthScreen from './screens/AuthScreen'
 import DocsScreen from './screens/DocsScreen'
@@ -20,8 +25,13 @@ type NavigationState = {
 function App() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('editor')
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => loadCurrentUser())
+  const [articles, setArticles] = useState(() => loadArticles())
   const location = useLocation()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    saveArticles(articles)
+  }, [articles])
 
   const openAuth = (mode: AuthMode) => {
     navigate(mode === 'signup' ? '/signup' : '/login')
@@ -87,6 +97,12 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const resetArticles = () => {
+    const seedArticles = resetStoredArticles()
+    setArticles(seedArticles)
+    return seedArticles
+  }
+
   return (
     <div className="app-shell">
       <Topbar
@@ -136,7 +152,11 @@ function App() {
           path="/docs"
           element={
             currentUser ? (
-              <DocsScreen currentUser={currentUser} />
+              <DocsScreen
+                articles={articles}
+                currentUser={currentUser}
+                onResetArticles={resetArticles}
+              />
             ) : (
               <Navigate to="/login" replace state={{ from: location }} />
             )
@@ -146,7 +166,11 @@ function App() {
           path="/docs/:articleId"
           element={
             currentUser ? (
-              <DocsScreen currentUser={currentUser} />
+              <DocsScreen
+                articles={articles}
+                currentUser={currentUser}
+                onResetArticles={resetArticles}
+              />
             ) : (
               <Navigate to="/login" replace state={{ from: location }} />
             )

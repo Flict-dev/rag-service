@@ -1165,7 +1165,8 @@ kbd {
 }
 
 .toc-card,
-.access-card {
+.access-card,
+.reset-card {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1186,7 +1187,8 @@ kbd {
   color: #174ea6;
 }
 
-.access-card {
+.access-card,
+.reset-card {
   margin-top: 16px;
 }
 
@@ -1196,14 +1198,16 @@ kbd {
   font-size: 17px;
 }
 
-.access-card p {
+.access-card p,
+.reset-card p {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.6;
 }
 
-.access-card button {
+.access-card button,
+.reset-card button {
   justify-content: center;
   gap: 8px;
   width: 100%;
@@ -1216,6 +1220,14 @@ kbd {
   font: inherit;
   font-size: 14px;
   font-weight: 800;
+}
+
+.reset-card button {
+  display: flex;
+  border-color: var(--line-strong);
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
 }
 
 .access-card.readonly button {
@@ -1231,6 +1243,44 @@ kbd {
   color: #16805d;
   font-size: 12px;
   font-weight: 800;
+}
+
+.doc-meta .status-pill {
+  border-color: #c8dfcf;
+  background: #f2fbf4;
+  color: #1c6040;
+}
+
+.doc-meta .status-draft {
+  border-color: #ead9ae;
+  background: #fff8e5;
+  color: #7a4a00;
+}
+
+.doc-meta .status-review {
+  border-color: #bfd5ff;
+  background: #edf5ff;
+  color: #174ea6;
+}
+
+.empty-docs-state {
+  display: grid;
+  gap: 18px;
+  justify-items: center;
+  width: min(520px, calc(100% - 32px));
+  margin: 96px auto;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--muted);
+  text-align: center;
+  box-shadow: var(--soft-shadow);
+}
+
+.empty-docs-state strong {
+  color: var(--ink);
+  font-size: 20px;
 }
 
 .people-grid {

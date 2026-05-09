@@ -1,43 +1,41 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BookOpen, Edit3, FileText, Search } from 'lucide-react'
+import { BookOpen, Edit3, FileText, RefreshCcw, Search } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import SearchDialog from '../components/SearchDialog'
-import { editorAccess, knowledgeArticles, roleLabels } from '../data/demoData'
-import { groupArticlesByGroup, searchArticles } from '../lib/articles'
-import type { CurrentUser } from '../types'
+import { articleStatusLabels, editorAccess, roleLabels } from '../data/demoData'
+import { formatArticleDate, groupArticlesByGroup, searchArticles } from '../lib/articles'
+import type { CurrentUser, KnowledgeArticle } from '../types'
 
 type DocsScreenProps = {
+  articles: KnowledgeArticle[]
   currentUser: CurrentUser
+  onResetArticles: () => KnowledgeArticle[]
 }
 
-function DocsScreen({ currentUser }: DocsScreenProps) {
+function DocsScreen({ articles, currentUser, onResetArticles }: DocsScreenProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
   const { articleId } = useParams<{ articleId: string }>()
-  const fallbackArticle = knowledgeArticles[0]
+  const fallbackArticle = articles[0] ?? null
 
-  const selectedArticle =
-    knowledgeArticles.find((article) => article.id === articleId) ?? fallbackArticle
+  const selectedArticle = articles.find((article) => article.id === articleId) ?? fallbackArticle
 
-  const groupedArticles = useMemo(() => groupArticlesByGroup(knowledgeArticles), [])
-  const searchResults = useMemo(
-    () => searchArticles(knowledgeArticles, searchQuery),
-    [searchQuery],
-  )
+  const groupedArticles = useMemo(() => groupArticlesByGroup(articles), [articles])
+  const searchResults = useMemo(() => searchArticles(articles, searchQuery), [articles, searchQuery])
 
-  const canEdit = selectedArticle.access.includes(currentUser.role)
+  const canEdit = selectedArticle?.access.includes(currentUser.role) ?? false
   const canManageAccess = currentUser.role === 'admin'
 
   useEffect(() => {
     const articleExists = articleId
-      ? knowledgeArticles.some((article) => article.id === articleId)
+      ? articles.some((article) => article.id === articleId)
       : false
 
-    if (!articleExists) {
+    if (fallbackArticle && !articleExists) {
       navigate(`/docs/${fallbackArticle.id}`, { replace: true })
     }
-  }, [articleId, fallbackArticle.id, navigate])
+  }, [articleId, articles, fallbackArticle, navigate])
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -57,6 +55,29 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
 
     return () => window.removeEventListener('keydown', handleShortcut)
   }, [])
+
+  const handleResetArticles = () => {
+    const seedArticles = onResetArticles()
+    const nextArticleId = seedArticles[0]?.id
+
+    if (nextArticleId) {
+      navigate(`/docs/${nextArticleId}`, { replace: true })
+    }
+  }
+
+  if (!selectedArticle) {
+    return (
+      <main className="docs-app">
+        <div className="empty-docs-state">
+          <strong>В базе пока нет статей</strong>
+          <button className="primary-button" onClick={handleResetArticles} type="button">
+            <RefreshCcw aria-hidden="true" size={16} />
+            <span>Вернуть демо-данные</span>
+          </button>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main className="docs-app">
@@ -100,8 +121,12 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
             <p>{selectedArticle.description}</p>
 
             <div className="doc-meta">
+              <span className={`status-pill status-${selectedArticle.status}`}>
+                {articleStatusLabels[selectedArticle.status]}
+              </span>
               <span>Владелец: {selectedArticle.owner}</span>
-              <span>Обновлено: {selectedArticle.updated}</span>
+              <span>Создано: {formatArticleDate(selectedArticle.createdAt)}</span>
+              <span>Обновлено: {formatArticleDate(selectedArticle.updatedAt)}</span>
               <span>Доступ: {selectedArticle.access.map((role) => roleLabels[role]).join(', ')}</span>
             </div>
           </header>
@@ -162,6 +187,15 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
               <span>{canEdit ? 'Редактировать' : 'Нет доступа'}</span>
             </button>
             {canManageAccess && <small>Администратор может менять роли раздела.</small>}
+          </div>
+
+          <div className="reset-card">
+            <span className="sidebar-label">Демо-данные</span>
+            <p>Верните исходный набор статей, статусов и дат обновления.</p>
+            <button onClick={handleResetArticles} type="button">
+              <RefreshCcw aria-hidden="true" size={16} />
+              <span>Сбросить статьи</span>
+            </button>
           </div>
         </aside>
       </div>

@@ -1,4 +1,11 @@
-import type { CurrentUser, EditorAccess, KnowledgeArticle, NavItem, UserRole } from '../types'
+import type {
+  ArticleStatus,
+  CurrentUser,
+  EditorAccess,
+  KnowledgeArticle,
+  NavItem,
+  UserRole,
+} from '../types'
 
 export const navItems: NavItem[] = [
   { label: 'Продукт', sectionId: 'home' },
@@ -17,6 +24,12 @@ export const roleDescriptions: Record<UserRole, string> = {
   reader: 'Может читать базу и искать материалы.',
   editor: 'Может создавать и редактировать статьи.',
   admin: 'Может управлять ролями и публикацией.',
+}
+
+export const articleStatusLabels: Record<ArticleStatus, string> = {
+  draft: 'Черновик',
+  review: 'На ревью',
+  published: 'Опубликовано',
 }
 
 export const demoUsers: CurrentUser[] = [
@@ -129,7 +142,10 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     description:
       'Короткое описание того, как команда хранит регламенты, инструкции и владельцев материалов.',
     owner: 'Демо редактор',
-    updated: '08.05.2026',
+    ownerId: 'demo-editor',
+    createdAt: '2026-05-01',
+    updatedAt: '2026-05-08',
+    status: 'published',
     access: ['editor', 'admin'],
     tags: ['start', 'docs', 'knowledge'],
     sections: [
@@ -166,7 +182,10 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     description:
       'Список ролей и людей, которым разрешено менять контент базы знаний.',
     owner: 'Контент-админ',
-    updated: '08.05.2026',
+    ownerId: 'demo-admin',
+    createdAt: '2026-05-02',
+    updatedAt: '2026-05-08',
+    status: 'review',
     access: ['admin'],
     tags: ['access', 'roles', 'editors'],
     sections: [
@@ -202,7 +221,10 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     description:
       'Как искать статьи и получать короткие ответы по материалам базы.',
     owner: 'Демо редактор',
-    updated: '08.05.2026',
+    ownerId: 'demo-editor',
+    createdAt: '2026-05-03',
+    updatedAt: '2026-05-08',
+    status: 'published',
     access: ['editor', 'admin'],
     tags: ['search', 'rag', 'assistant'],
     sections: [
@@ -233,7 +255,10 @@ export const knowledgeArticles: KnowledgeArticle[] = [
     description:
       'Минимальный процесс подготовки материала от черновика до опубликованной страницы.',
     owner: 'Контент-админ',
-    updated: '08.05.2026',
+    ownerId: 'demo-admin',
+    createdAt: '2026-05-04',
+    updatedAt: '2026-05-08',
+    status: 'draft',
     access: ['editor', 'admin'],
     tags: ['publish', 'workflow', 'draft'],
     sections: [
