@@ -8,6 +8,7 @@ import {
   resetArticles as resetStoredArticles,
   saveArticles,
 } from './lib/articleStore'
+import { fetchApiArticles } from './lib/api'
 import { clearCurrentUser, loadCurrentUser, saveCurrentUser } from './lib/storage'
 import AuthScreen from './screens/AuthScreen'
 import DocsScreen from './screens/DocsScreen'
@@ -32,6 +33,30 @@ function App() {
   useEffect(() => {
     saveArticles(articles)
   }, [articles])
+
+  useEffect(() => {
+    if (!currentUser) {
+      return
+    }
+
+    let ignoreResult = false
+
+    fetchApiArticles(currentUser)
+      .then((apiArticles) => {
+        if (!ignoreResult) {
+          setArticles(apiArticles)
+        }
+      })
+      .catch(() => {
+        if (!ignoreResult) {
+          setArticles(loadArticles())
+        }
+      })
+
+    return () => {
+      ignoreResult = true
+    }
+  }, [currentUser])
 
   const openAuth = (mode: AuthMode) => {
     navigate(mode === 'signup' ? '/signup' : '/login')
