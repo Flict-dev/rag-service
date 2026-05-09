@@ -4,6 +4,9 @@ agents.md
 **/AGENTS.md
 **/agents.md
 
+# Local development notes
+DEVELOPMENT_PLAN.md
+
 # Environment and provider secrets
 .env
 .env.*
