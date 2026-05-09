@@ -1,10 +1,15 @@
-import { ArrowRight, Lightbulb, Search } from 'lucide-react'
+import { ArrowRight, Lightbulb, Search, Sparkles } from 'lucide-react'
+import type { AskResponse } from '../api/ask'
 import type { ArticleSearchResult, HighlightSegment } from '../lib/search'
 
 type SearchDialogProps = {
+  answer: AskResponse | null
+  answerError?: string | null
+  answerLoading?: boolean
   query: string
   results: ArticleSearchResult[]
   selectedArticleId: string
+  onAsk: () => void
   onClose: () => void
   onQueryChange: (query: string) => void
   onSelect: (articleId: string) => void
@@ -31,9 +36,13 @@ function HighlightedText({ segments }: HighlightedTextProps) {
 }
 
 function SearchDialog({
+  answer,
+  answerError,
+  answerLoading = false,
   query,
   results,
   selectedArticleId,
+  onAsk,
   onClose,
   onQueryChange,
   onSelect,
@@ -52,12 +61,41 @@ function SearchDialog({
             type="search"
             value={query}
           />
+          <button disabled={queryIsEmpty || answerLoading} onClick={onAsk} type="button">
+            <Sparkles aria-hidden="true" size={14} />
+            <span>{answerLoading ? '...' : 'Ответ'}</span>
+          </button>
           <button onClick={onClose} type="button">
             Esc
           </button>
         </div>
 
         <div className="search-results">
+          {!queryIsEmpty && (answer || answerError || answerLoading) && (
+            <section className={answerError ? 'search-answer error' : 'search-answer'}>
+              <span className="sidebar-label">Ответ из базы</span>
+              <p>
+                {answerLoading
+                  ? 'Собираем ответ по найденным статьям...'
+                  : answerError ?? answer?.answer}
+              </p>
+              {answer && answer.sources.length > 0 && (
+                <div>
+                  {answer.sources.map((source) => (
+                    <button
+                      key={`${source.articleId}-${source.sectionHeading}`}
+                      onClick={() => onSelect(source.articleId)}
+                      type="button"
+                    >
+                      <strong>{source.title}</strong>
+                      <small>{source.sectionHeading}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           {queryIsEmpty ? (
             <div className="search-tips">
               <Lightbulb aria-hidden="true" size={18} />

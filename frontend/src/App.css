@@ -1670,6 +1670,9 @@ kbd {
 }
 
 .search-input-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 30px;
   padding: 0 10px;
   border: 1px solid var(--line);
@@ -1678,6 +1681,11 @@ kbd {
   color: var(--muted);
   font: 800 12px/1 var(--font-mono);
   cursor: pointer;
+}
+
+.search-input-row button:disabled {
+  opacity: 0.54;
+  cursor: wait;
 }
 
 .search-results {
@@ -1737,6 +1745,55 @@ kbd {
   border-radius: 4px;
   background: #fff0a8;
   color: inherit;
+}
+
+.search-answer {
+  display: grid;
+  gap: 10px;
+  margin: 8px;
+  padding: 14px;
+  border: 1px solid #c8dfcf;
+  border-radius: 8px;
+  background: #f2fbf4;
+}
+
+.search-answer.error {
+  border-color: #efc8c4;
+  background: #fff5f2;
+}
+
+.search-answer p {
+  margin: 0;
+  color: #1c6040;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.search-answer.error p {
+  color: #7d261d;
+}
+
+.search-answer div {
+  display: grid;
+  gap: 8px;
+}
+
+.search-answer button {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid rgba(28, 96, 64, 0.18);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+.search-answer button small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .search-tips {

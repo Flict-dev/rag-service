@@ -230,14 +230,22 @@ function normalizeQuery(value) {
 
 function collectSearchFields(article) {
   return [
-    { field: 'title', value: article.title },
-    { field: 'description', value: article.description },
-    { field: 'group', value: article.group },
-    { field: 'owner', value: article.owner },
-    { field: 'tags', value: article.tags.join(', ') },
+    { field: 'title', sectionHeading: article.sections[0]?.heading ?? 'Статья', value: article.title },
+    {
+      field: 'description',
+      sectionHeading: article.sections[0]?.heading ?? 'Статья',
+      value: article.description,
+    },
+    { field: 'group', sectionHeading: article.sections[0]?.heading ?? 'Статья', value: article.group },
+    { field: 'owner', sectionHeading: article.sections[0]?.heading ?? 'Статья', value: article.owner },
+    { field: 'tags', sectionHeading: article.sections[0]?.heading ?? 'Статья', value: article.tags.join(', ') },
     ...article.sections.flatMap((section) => [
-      { field: 'sectionHeading', value: section.heading },
-      ...section.paragraphs.map((paragraph) => ({ field: 'paragraph', value: paragraph })),
+      { field: 'sectionHeading', sectionHeading: section.heading, value: section.heading },
+      ...section.paragraphs.map((paragraph) => ({
+        field: 'paragraph',
+        sectionHeading: section.heading,
+        value: paragraph,
+      })),
     ]),
   ]
 }
@@ -256,6 +264,28 @@ function searchReadableArticles(articles, query) {
 
     return matchedField ? [{ article, match: matchedField }] : []
   })
+}
+
+function buildAnswerFromResults(question, results) {
+  if (results.length === 0) {
+    return {
+      answer:
+        'По доступным статьям не нашлось уверенного ответа. Попробуйте уточнить вопрос или проверьте права доступа.',
+      sources: [],
+    }
+  }
+
+  const sources = results.slice(0, 3).map((result) => ({
+    articleId: result.article.id,
+    sectionHeading: result.match.sectionHeading,
+    title: result.article.title,
+  }))
+  const sourceTitles = sources.map((source) => source.title).join(', ')
+
+  return {
+    answer: `По запросу “${question}” ближе всего подходят материалы: ${sourceTitles}. Это черновой ответ по поисковому индексу, без LLM-обобщения.`,
+    sources,
+  }
 }
 
 app.get('/health', (_request, response) => {
@@ -363,6 +393,23 @@ app.get('/search', requireUser, (request, response) => {
   const results = searchReadableArticles(articles, request.query.q)
 
   response.json({ query: String(request.query.q ?? ''), results })
+})
+
+app.post('/ask', requireUser, (request, response) => {
+  const question = normalizeText(request.body?.question)
+
+  if (!question) {
+    response.status(400).json({ error: 'question is required' })
+    return
+  }
+
+  const articles = listArticles().filter((article) => canReadArticle(article, request.user))
+  const results = searchReadableArticles(articles, question)
+
+  response.json({
+    question,
+    ...buildAnswerFromResults(question, results),
+  })
 })
 
 app.use((error, _request, response, _next) => {

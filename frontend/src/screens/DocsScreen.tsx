@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, Edit3, FileText, Plus, RefreshCcw, Search } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { askApi, type AskResponse } from '../api/ask'
 import ArticleEditorForm from '../components/ArticleEditorForm'
 import SearchDialog from '../components/SearchDialog'
 import { articleStatusLabels, editorAccess, roleLabels } from '../data/demoData'
@@ -74,6 +75,9 @@ function DocsScreen({
 }: DocsScreenProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [askAnswer, setAskAnswer] = useState<AskResponse | null>(null)
+  const [askError, setAskError] = useState<string | null>(null)
+  const [askLoading, setAskLoading] = useState(false)
   const [editorState, setEditorState] = useState<EditorState>({ mode: 'view' })
   const navigate = useNavigate()
   const { articleId } = useParams<{ articleId: string }>()
@@ -143,6 +147,33 @@ function DocsScreen({
 
     if (nextArticleId) {
       navigate(`/docs/${nextArticleId}`, { replace: true })
+    }
+  }
+
+  const updateSearchQuery = (nextQuery: string) => {
+    setSearchQuery(nextQuery)
+    setAskAnswer(null)
+    setAskError(null)
+  }
+
+  const askQuestion = async () => {
+    const question = searchQuery.trim()
+
+    if (!question) {
+      return
+    }
+
+    setAskLoading(true)
+    setAskAnswer(null)
+    setAskError(null)
+
+    try {
+      const answer = await askApi(currentUser, question)
+      setAskAnswer(answer)
+    } catch {
+      setAskError('Не удалось получить ответ из backend.')
+    } finally {
+      setAskLoading(false)
     }
   }
 
@@ -418,16 +449,22 @@ function DocsScreen({
 
       {searchOpen && (
         <SearchDialog
+          answer={askAnswer}
+          answerError={askError}
+          answerLoading={askLoading}
           query={searchQuery}
           results={searchResults}
           selectedArticleId={selectedArticle?.id ?? ''}
+          onAsk={askQuestion}
           onClose={() => setSearchOpen(false)}
-          onQueryChange={setSearchQuery}
+          onQueryChange={updateSearchQuery}
           onSelect={(nextArticleId) => {
             setEditorState({ mode: 'view' })
             navigate(`/docs/${nextArticleId}`)
             setSearchOpen(false)
             setSearchQuery('')
+            setAskAnswer(null)
+            setAskError(null)
           }}
         />
       )}
