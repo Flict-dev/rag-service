@@ -1,4 +1,3 @@
-export type View = 'landing' | 'auth' | 'docs'
 export type AuthMode = 'signin' | 'signup'
 export type UserRole = 'reader' | 'editor' | 'admin'
 

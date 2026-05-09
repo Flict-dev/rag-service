@@ -27,14 +27,12 @@ function Topbar({
 
     const sectionId = item.sectionId
 
-    if (sectionId && sectionId !== 'home') {
-      window.setTimeout(() => {
-        document.getElementById(sectionId)?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        })
-      }, 80)
-    }
+    window.setTimeout(() => {
+      document.getElementById(sectionId ?? 'home')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }, 80)
   }
 
   return (

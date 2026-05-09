@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, Edit3, FileText, Search } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
 import SearchDialog from '../components/SearchDialog'
 import { editorAccess, knowledgeArticles, roleLabels } from '../data/demoData'
 import { groupArticlesByGroup, searchArticles } from '../lib/articles'
@@ -10,12 +11,14 @@ type DocsScreenProps = {
 }
 
 function DocsScreen({ currentUser }: DocsScreenProps) {
-  const [selectedArticleId, setSelectedArticleId] = useState(knowledgeArticles[0].id)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const navigate = useNavigate()
+  const { articleId } = useParams<{ articleId: string }>()
+  const fallbackArticle = knowledgeArticles[0]
 
   const selectedArticle =
-    knowledgeArticles.find((article) => article.id === selectedArticleId) ?? knowledgeArticles[0]
+    knowledgeArticles.find((article) => article.id === articleId) ?? fallbackArticle
 
   const groupedArticles = useMemo(() => groupArticlesByGroup(knowledgeArticles), [])
   const searchResults = useMemo(
@@ -25,6 +28,16 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
 
   const canEdit = selectedArticle.access.includes(currentUser.role)
   const canManageAccess = currentUser.role === 'admin'
+
+  useEffect(() => {
+    const articleExists = articleId
+      ? knowledgeArticles.some((article) => article.id === articleId)
+      : false
+
+    if (!articleExists) {
+      navigate(`/docs/${fallbackArticle.id}`, { replace: true })
+    }
+  }, [articleId, fallbackArticle.id, navigate])
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -63,7 +76,7 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
                   <button
                     className={article.id === selectedArticle.id ? 'active' : ''}
                     key={article.id}
-                    onClick={() => setSelectedArticleId(article.id)}
+                    onClick={() => navigate(`/docs/${article.id}`)}
                     type="button"
                   >
                     <FileText aria-hidden="true" size={15} />
@@ -161,7 +174,7 @@ function DocsScreen({ currentUser }: DocsScreenProps) {
           onClose={() => setSearchOpen(false)}
           onQueryChange={setSearchQuery}
           onSelect={(articleId) => {
-            setSelectedArticleId(articleId)
+            navigate(`/docs/${articleId}`)
             setSearchOpen(false)
             setSearchQuery('')
           }}

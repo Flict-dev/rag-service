@@ -1,4 +1,5 @@
 import { ArrowRight, FileText, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import {
   accessModes,
   docSections,
@@ -212,10 +213,10 @@ function LandingPage({ currentUser, onOpenAuth, onOpenDocs }: LandingPageProps) 
             <span>Найти статью</span>
             <span>Проверить доступ</span>
           </div>
-          <button className="primary-button" onClick={() => onOpenAuth('signin')} type="button">
+          <Link className="primary-button" to="/login">
             <span>Открыть демо</span>
             <ArrowRight aria-hidden="true" size={16} />
-          </button>
+          </Link>
         </div>
       </section>
     </main>
