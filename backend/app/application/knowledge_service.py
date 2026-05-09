@@ -3,7 +3,6 @@ import re
 from typing import Any
 
 from backend.app.domain.models import Article, DEFAULT_ACCESS, User, VALID_ROLES, VALID_STATUSES
-from backend.app.infrastructure.db.database import list_articles
 
 
 def today_iso_date() -> str:
@@ -65,9 +64,8 @@ def slugify_title(title: str) -> str:
     return normalized_title or "article"
 
 
-def create_unique_article_id(title: str) -> str:
+def create_unique_article_id(title: str, existing_ids: set[str]) -> str:
     base_id = slugify_title(title)
-    existing_ids = {str(article["id"]) for article in list_articles()}
     candidate_id = base_id
     counter = 2
 
@@ -141,7 +139,12 @@ def validate_article(article: Article) -> list[str]:
     return errors
 
 
-def build_article_from_payload(payload: dict[str, Any], user: User, existing_article: Article | None = None) -> Article:
+def build_article_from_payload(
+    payload: dict[str, Any],
+    user: User,
+    existing_article: Article | None = None,
+    existing_ids: set[str] | None = None,
+) -> Article:
     now = today_iso_date()
     status = normalize_status(payload.get("status"), str(existing_article.get("status", "draft")) if existing_article else "draft")
     fallback_access = existing_article.get("access", DEFAULT_ACCESS) if existing_article else DEFAULT_ACCESS
@@ -152,7 +155,10 @@ def build_article_from_payload(payload: dict[str, Any], user: User, existing_art
         "id": (
             existing_article["id"]
             if existing_article
-            else normalize_text(payload.get("id"), create_unique_article_id(str(payload.get("title", "article"))))
+            else normalize_text(
+                payload.get("id"),
+                create_unique_article_id(str(payload.get("title", "article")), existing_ids or set()),
+            )
         ),
         "group": normalize_text(payload.get("group"), str(existing_article.get("group", "")) if existing_article else ""),
         "title": normalize_text(payload.get("title"), str(existing_article.get("title", "")) if existing_article else ""),
