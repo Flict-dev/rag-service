@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Save, Send, Trash2, X } from 'lucide-react'
+import { Check, Save, Send, Trash2, Undo2, X } from 'lucide-react'
 import { articleStatusLabels, roleLabels } from '../data/demoData'
 import type { ArticleStatus, CurrentUser, KnowledgeArticle, UserRole } from '../types'
 
 type ArticleEditorMode = 'create' | 'edit'
-type SubmitIntent = Extract<ArticleStatus, 'draft' | 'published'>
+type SubmitIntent = ArticleStatus
 
 type SectionFormValue = {
   id: string
@@ -21,6 +21,11 @@ type ArticleFormValue = {
   tags: string
   access: UserRole[]
   sections: SectionFormValue[]
+}
+
+type PendingSubmit = {
+  article: KnowledgeArticle
+  status: SubmitIntent
 }
 
 type ArticleEditorFormProps = {
@@ -166,7 +171,10 @@ function ArticleEditorForm({
 }: ArticleEditorFormProps) {
   const [formValue, setFormValue] = useState(() => createInitialForm(article, currentUser))
   const [validationErrors, setValidationErrors] = useState<string[]>([])
+  const [pendingSubmit, setPendingSubmit] = useState<PendingSubmit | null>(null)
   const isCreateMode = mode === 'create'
+  const saveStatus: SubmitIntent = isCreateMode ? 'draft' : (article?.status ?? 'draft')
+  const showPublishButton = isCreateMode || article?.status !== 'published'
 
   const updateField = (field: keyof Omit<ArticleFormValue, 'sections' | 'access'>, value: string) => {
     setFormValue((currentValue) => ({
@@ -222,12 +230,13 @@ function ArticleEditorForm({
     }))
   }
 
-  const submitArticle = (status: SubmitIntent) => {
+  const buildArticle = (status: SubmitIntent) => {
     const nextValidationErrors = getValidationErrors(formValue)
 
     if (nextValidationErrors.length > 0) {
       setValidationErrors(nextValidationErrors)
-      return
+      setPendingSubmit(null)
+      return null
     }
 
     const normalizedSections = formValue.sections.map((section) => {
@@ -256,8 +265,35 @@ function ArticleEditorForm({
       sections: normalizedSections,
     }
 
+    return nextArticle
+  }
+
+  const requestArticleSubmit = (status: SubmitIntent) => {
+    const nextArticle = buildArticle(status)
+
+    if (!nextArticle) {
+      return
+    }
+
     setValidationErrors([])
-    onSubmit(nextArticle, status)
+    setPendingSubmit({
+      article: nextArticle,
+      status,
+    })
+  }
+
+  const applyPendingSubmit = () => {
+    if (!pendingSubmit) {
+      return
+    }
+
+    onSubmit(pendingSubmit.article, pendingSubmit.status)
+    setPendingSubmit(null)
+  }
+
+  const keepCurrentArticle = () => {
+    setPendingSubmit(null)
+    onCancel()
   }
 
   return (
@@ -285,6 +321,27 @@ function ArticleEditorForm({
               <li key={error}>{error}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {pendingSubmit && (
+        <div className="editor-confirmation" role="group" aria-label="Подтверждение сохранения">
+          <div>
+            <strong>Применить изменения?</strong>
+            <p>
+              Можно сохранить текущую версию или оставить статью без изменений.
+            </p>
+          </div>
+          <div className="editor-confirmation-actions">
+            <button className="primary-button" onClick={applyPendingSubmit} type="button">
+              <Check aria-hidden="true" size={16} />
+              <span>Применить изменения</span>
+            </button>
+            <button className="secondary-button" onClick={keepCurrentArticle} type="button">
+              <Undo2 aria-hidden="true" size={16} />
+              <span>Оставить как есть</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -429,14 +486,16 @@ function ArticleEditorForm({
           </button>
         )}
         <span />
-        <button className="secondary-button" onClick={() => submitArticle('draft')} type="button">
+        <button className="secondary-button" onClick={() => requestArticleSubmit(saveStatus)} type="button">
           <Save aria-hidden="true" size={16} />
-          <span>Сохранить черновик</span>
+          <span>{isCreateMode ? 'Сохранить черновик' : 'Сохранить'}</span>
         </button>
-        <button className="primary-button" onClick={() => submitArticle('published')} type="button">
-          <Send aria-hidden="true" size={16} />
-          <span>Опубликовать</span>
-        </button>
+        {showPublishButton && (
+          <button className="primary-button" onClick={() => requestArticleSubmit('published')} type="button">
+            <Send aria-hidden="true" size={16} />
+            <span>Опубликовать</span>
+          </button>
+        )}
       </div>
     </form>
   )

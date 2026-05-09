@@ -7,7 +7,7 @@ import SearchDialog from '../components/SearchDialog'
 import { articleStatusLabels, editorAccess, roleLabels } from '../data/demoData'
 import { formatArticleDate, groupArticlesByGroup } from '../lib/articles'
 import { searchArticles } from '../lib/search'
-import type { CurrentUser, KnowledgeArticle } from '../types'
+import type { ArticleStatus, CurrentUser, KnowledgeArticle } from '../types'
 
 type EditorMode = 'view' | 'edit' | 'create'
 type EditorState =
@@ -199,7 +199,7 @@ function DocsScreen({
     setEditorState({ mode: 'view' })
   }
 
-  const submitArticle = async (article: KnowledgeArticle, status: 'draft' | 'published') => {
+  const submitArticle = async (article: KnowledgeArticle, status: ArticleStatus) => {
     const now = todayIsoDate()
     const isNewArticle = !article.id
     const nextArticle: KnowledgeArticle = {
