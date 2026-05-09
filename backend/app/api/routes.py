@@ -1,17 +1,20 @@
-from typing import Any
+from typing import Any, cast
 
-from fastapi import APIRouter, Body, Depends, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Query, Response, UploadFile, status
 from pydantic import BaseModel
 
 from backend.app.api.dependencies import get_auth_token, get_repository, require_user
 from backend.app.application.ports.repositories import KnowledgeRepository
 from backend.app.application.ports.security import PasswordHasher
+from backend.app.application.ports.storage import DocumentStorage
 from backend.app.application.use_cases.articles import ArticleUseCases
 from backend.app.application.use_cases.auth import login as login_user
 from backend.app.application.use_cases.auth import logout as logout_user
+from backend.app.application.use_cases.documents import DocumentUseCases, MAX_DOCUMENT_UPLOAD_BYTES
 from backend.app.application.use_cases.qa import QaUseCases
 from backend.app.domain.models import User, UserRole
 from backend.app.infrastructure.security.passwords import PBKDF2PasswordHasher
+from backend.app.infrastructure.storage.local import LocalDocumentStorage
 
 
 router = APIRouter()
@@ -29,6 +32,10 @@ class AskRequest(BaseModel):
 
 def get_password_hasher() -> PasswordHasher:
     return PBKDF2PasswordHasher()
+
+
+def get_document_storage() -> DocumentStorage:
+    return LocalDocumentStorage()
 
 
 @router.get("/health")
@@ -103,6 +110,47 @@ async def remove_article(
 ) -> Response:
     ArticleUseCases(repository).delete(article_id, user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/documents")
+async def documents(
+    user: User = Depends(require_user),
+    repository: KnowledgeRepository = Depends(get_repository),
+    storage: DocumentStorage = Depends(get_document_storage),
+) -> dict[str, list[dict[str, object]]]:
+    return {"documents": DocumentUseCases(repository, storage).list_documents(user)}
+
+
+@router.post("/documents", status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    user: User = Depends(require_user),
+    repository: KnowledgeRepository = Depends(get_repository),
+    storage: DocumentStorage = Depends(get_document_storage),
+) -> dict[str, object]:
+    content = await file.read(MAX_DOCUMENT_UPLOAD_BYTES + 1)
+    use_cases = DocumentUseCases(repository, storage)
+    result = use_cases.upload(
+        user,
+        filename=file.filename or "document",
+        content_type=file.content_type,
+        content=content,
+    )
+    document = cast(dict[str, object], result["document"])
+    job = cast(dict[str, object], result["job"])
+    background_tasks.add_task(use_cases.run_ingestion, str(document["id"]), str(job["id"]))
+    return result
+
+
+@router.get("/documents/{document_id}/ingestion-jobs")
+async def ingestion_jobs(
+    document_id: str,
+    user: User = Depends(require_user),
+    repository: KnowledgeRepository = Depends(get_repository),
+    storage: DocumentStorage = Depends(get_document_storage),
+) -> dict[str, list[dict[str, object]]]:
+    return {"jobs": DocumentUseCases(repository, storage).list_ingestion_jobs(user, document_id)}
 
 
 @router.get("/search")

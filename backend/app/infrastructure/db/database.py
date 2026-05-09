@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 from typing import Any
 
-from backend.app.domain.models import Article, User, UserCredentials
+from backend.app.domain.models import Article, Document, IngestionJob, User, UserCredentials
 from backend.app.infrastructure.db.seed_data import demo_password, demo_users, roles, seed_articles
 from backend.app.infrastructure.security.passwords import PBKDF2PasswordHasher
 from backend.app.shared.config import get_settings
@@ -64,6 +64,18 @@ def _parse_json_list(value: str | None) -> list[str]:
         return []
 
     return [item for item in parsed_value if isinstance(item, str)]
+
+
+def _parse_json_object(value: str | None) -> dict[str, object]:
+    if not value:
+        return {}
+
+    try:
+        parsed_value = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+
+    return parsed_value if isinstance(parsed_value, dict) else {}
 
 
 def _utc_now() -> datetime:
@@ -251,6 +263,28 @@ def init_database() -> None:
               expires_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS documents (
+              id TEXT PRIMARY KEY,
+              filename TEXT NOT NULL,
+              content_type TEXT NOT NULL,
+              size_bytes INTEGER NOT NULL,
+              storage_path TEXT NOT NULL,
+              uploaded_by TEXT NOT NULL REFERENCES users(id),
+              uploaded_at TEXT NOT NULL,
+              status TEXT NOT NULL CHECK (status IN ('queued', 'processing', 'indexed', 'failed')),
+              metadata_json TEXT NOT NULL DEFAULT '{}'
+            );
+
+            CREATE TABLE IF NOT EXISTS ingestion_jobs (
+              id TEXT PRIMARY KEY,
+              document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+              status TEXT NOT NULL CHECK (status IN ('queued', 'processing', 'completed', 'failed')),
+              created_at TEXT NOT NULL,
+              started_at TEXT,
+              finished_at TEXT,
+              error TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS articles (
               id TEXT PRIMARY KEY,
               group_name TEXT NOT NULL,
@@ -292,6 +326,8 @@ def seed_database(reset: bool = False) -> None:
     with _transaction() as connection:
         if reset:
             connection.execute("DELETE FROM user_sessions")
+            connection.execute("DELETE FROM ingestion_jobs")
+            connection.execute("DELETE FROM documents")
             connection.execute("DELETE FROM articles")
             connection.execute("DELETE FROM users")
             connection.execute("DELETE FROM roles")
@@ -392,6 +428,196 @@ def delete_article(article_id: str) -> bool:
     with _transaction() as connection:
         cursor = connection.execute("DELETE FROM articles WHERE id = ?", (article_id,))
         return cursor.rowcount > 0
+
+
+def _to_document(row: sqlite3.Row | None) -> Document | None:
+    if not row:
+        return None
+
+    return {
+        "id": row["id"],
+        "filename": row["filename"],
+        "contentType": row["content_type"],
+        "sizeBytes": row["size_bytes"],
+        "storagePath": row["storage_path"],
+        "uploadedBy": row["uploaded_by"],
+        "uploadedAt": row["uploaded_at"],
+        "status": row["status"],
+        "metadata": _parse_json_object(row["metadata_json"]),
+    }
+
+
+def _to_ingestion_job(row: sqlite3.Row | None) -> IngestionJob | None:
+    if not row:
+        return None
+
+    return {
+        "id": row["id"],
+        "documentId": row["document_id"],
+        "status": row["status"],
+        "createdAt": row["created_at"],
+        "startedAt": row["started_at"],
+        "finishedAt": row["finished_at"],
+        "error": row["error"],
+    }
+
+
+def list_documents() -> list[Document]:
+    with _connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, filename, content_type, size_bytes, storage_path, uploaded_by, uploaded_at, status, metadata_json
+            FROM documents
+            ORDER BY uploaded_at DESC, filename ASC
+            """
+        ).fetchall()
+
+        return [document for row in rows if (document := _to_document(row)) is not None]
+
+
+def create_document(document: Document) -> Document:
+    with _transaction() as connection:
+        connection.execute(
+            """
+            INSERT INTO documents (
+              id,
+              filename,
+              content_type,
+              size_bytes,
+              storage_path,
+              uploaded_by,
+              uploaded_at,
+              status,
+              metadata_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                document["id"],
+                document["filename"],
+                document["contentType"],
+                document["sizeBytes"],
+                document["storagePath"],
+                document["uploadedBy"],
+                document["uploadedAt"],
+                document["status"],
+                json.dumps(document.get("metadata", {}), ensure_ascii=False),
+            ),
+        )
+
+    with _connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, filename, content_type, size_bytes, storage_path, uploaded_by, uploaded_at, status, metadata_json
+            FROM documents
+            WHERE id = ?
+            """,
+            (document["id"],),
+        ).fetchone()
+
+        saved_document = _to_document(row)
+        if saved_document is None:
+            raise RuntimeError("created document was not found")
+
+        return saved_document
+
+
+def update_document_status(document_id: str, status: str) -> Document | None:
+    with _transaction() as connection:
+        connection.execute("UPDATE documents SET status = ? WHERE id = ?", (status, document_id))
+
+    with _connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, filename, content_type, size_bytes, storage_path, uploaded_by, uploaded_at, status, metadata_json
+            FROM documents
+            WHERE id = ?
+            """,
+            (document_id,),
+        ).fetchone()
+
+        return _to_document(row)
+
+
+def list_ingestion_jobs(document_id: str | None = None) -> list[IngestionJob]:
+    with _connection() as connection:
+        if document_id:
+            rows = connection.execute(
+                """
+                SELECT id, document_id, status, created_at, started_at, finished_at, error
+                FROM ingestion_jobs
+                WHERE document_id = ?
+                ORDER BY created_at DESC
+                """,
+                (document_id,),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                SELECT id, document_id, status, created_at, started_at, finished_at, error
+                FROM ingestion_jobs
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+
+        return [job for row in rows if (job := _to_ingestion_job(row)) is not None]
+
+
+def create_ingestion_job(job: IngestionJob) -> IngestionJob:
+    with _transaction() as connection:
+        connection.execute(
+            """
+            INSERT INTO ingestion_jobs (id, document_id, status, created_at, started_at, finished_at, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job["id"],
+                job["documentId"],
+                job["status"],
+                job["createdAt"],
+                job["startedAt"],
+                job["finishedAt"],
+                job["error"],
+            ),
+        )
+
+    jobs = list_ingestion_jobs(str(job["documentId"]))
+    return next((saved_job for saved_job in jobs if saved_job["id"] == job["id"]), job)
+
+
+def update_ingestion_job_status(
+    job_id: str,
+    status: str,
+    *,
+    error: str | None = None,
+    started_at: str | None = None,
+    finished_at: str | None = None,
+) -> IngestionJob | None:
+    with _transaction() as connection:
+        connection.execute(
+            """
+            UPDATE ingestion_jobs
+            SET
+              status = ?,
+              error = COALESCE(?, error),
+              started_at = COALESCE(?, started_at),
+              finished_at = COALESCE(?, finished_at)
+            WHERE id = ?
+            """,
+            (status, error, started_at, finished_at, job_id),
+        )
+
+    with _connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, document_id, status, created_at, started_at, finished_at, error
+            FROM ingestion_jobs
+            WHERE id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+
+        return _to_ingestion_job(row)
 
 
 def _to_user(row: sqlite3.Row | None) -> User | None:

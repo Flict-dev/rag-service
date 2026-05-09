@@ -29,6 +29,7 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    documents: Mapped[list["Document"]] = relationship(back_populates="uploader")
 
 
 class UserSession(Base):
@@ -100,3 +101,46 @@ class ArticleAccess(Base):
 
     article: Mapped[Article] = relationship(back_populates="access_roles")
     role: Mapped[Role] = relationship()
+
+
+class Document(Base):
+    __tablename__ = "documents"
+    __table_args__ = (
+        CheckConstraint("status IN ('queued', 'processing', 'indexed', 'failed')", name="documents_status_check"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    content_type: Mapped[str] = mapped_column(String, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_path: Mapped[str] = mapped_column(Text, nullable=False)
+    uploaded_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    uploaded_at: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    metadata_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
+    uploader: Mapped[User] = relationship(back_populates="documents")
+    ingestion_jobs: Mapped[list["IngestionJob"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
+
+
+class IngestionJob(Base):
+    __tablename__ = "ingestion_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'processing', 'completed', 'failed')",
+            name="ingestion_jobs_status_check",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    started_at: Mapped[str | None] = mapped_column(String)
+    finished_at: Mapped[str | None] = mapped_column(String)
+    error: Mapped[str | None] = mapped_column(Text)
+
+    document: Mapped[Document] = relationship(back_populates="ingestion_jobs")

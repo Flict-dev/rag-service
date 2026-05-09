@@ -48,6 +48,16 @@ npm run db:upgrade
 Backend проверяет пароль по PBKDF2-хэшу. Пароль демо-пользователей: `demo-password`.
 После входа backend выдаёт session token, frontend хранит его локально и отправляет в `Authorization: Bearer <token>`.
 
+## Документы и ingestion
+
+Backend поддерживает стартовый контур загрузки документов для будущего RAG:
+
+- `POST /documents` принимает multipart-файл, сохраняет оригинал в `UPLOAD_DIR` и создаёт ingestion job.
+- `GET /documents` возвращает загруженные документы.
+- `GET /documents/{document_id}/ingestion-jobs` показывает jobs по документу.
+
+Загрузка доступна ролям `editor` и `admin`. Текущий ingestion job пока выполняет подготовительную заглушку и переводит документ в статус `indexed`.
+
 ## Переменные окружения
 
 Скопируйте `.env.example` в `.env` при необходимости.
@@ -57,6 +67,7 @@ Backend проверяет пароль по PBKDF2-хэшу. Пароль де�
 - `CORS_ORIGIN` ограничивает frontend-origin для backend.
 - `DB_PATH` задаёт путь к SQLite-файлу.
 - `DATABASE_URL` задаёт SQLAlchemy/Alembic подключение; для PostgreSQL используйте `postgresql+psycopg://...`.
+- `UPLOAD_DIR` задаёт папку для оригиналов загруженных документов.
 - `VITE_API_URL` задаёт backend URL для frontend.
 
 ## Troubleshooting

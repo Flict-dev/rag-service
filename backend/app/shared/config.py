@@ -25,6 +25,9 @@ class Settings(BaseModel):
             os.getenv("DB_PATH", str(BACKEND_DIR / "data" / "rag-base.sqlite"))
         )
     )
+    upload_dir: Path = Field(
+        default_factory=lambda: Path(os.getenv("UPLOAD_DIR", str(BACKEND_DIR / "data" / "uploads")))
+    )
 
     @property
     def allowed_origins(self) -> list[str]:

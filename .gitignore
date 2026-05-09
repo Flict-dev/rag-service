@@ -69,3 +69,4 @@ pnpm-debug.log*
 # Local backend database
 backend/data/*.sqlite
 backend/data/*.sqlite-*
+backend/data/uploads/

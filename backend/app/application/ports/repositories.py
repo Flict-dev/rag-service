@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from backend.app.domain.models import Article, User, UserCredentials
+from backend.app.domain.models import Article, Document, IngestionJob, User, UserCredentials
 
 
 class UserRepository(Protocol):
@@ -27,5 +27,27 @@ class ArticleRepository(Protocol):
     def delete_article(self, article_id: str) -> bool: ...
 
 
-class KnowledgeRepository(UserRepository, ArticleRepository, Protocol):
+class DocumentRepository(Protocol):
+    def list_documents(self) -> list[Document]: ...
+
+    def create_document(self, document: Document) -> Document: ...
+
+    def update_document_status(self, document_id: str, status: str) -> Document | None: ...
+
+    def list_ingestion_jobs(self, document_id: str | None = None) -> list[IngestionJob]: ...
+
+    def create_ingestion_job(self, job: IngestionJob) -> IngestionJob: ...
+
+    def update_ingestion_job_status(
+        self,
+        job_id: str,
+        status: str,
+        *,
+        error: str | None = None,
+        started_at: str | None = None,
+        finished_at: str | None = None,
+    ) -> IngestionJob | None: ...
+
+
+class KnowledgeRepository(UserRepository, ArticleRepository, DocumentRepository, Protocol):
     pass
