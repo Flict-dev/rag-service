@@ -1,16 +1,20 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 import json
+import secrets
 import sqlite3
 from typing import Any
 
-from backend.app.domain.models import Article, User
-from backend.app.infrastructure.db.seed_data import demo_users, roles, seed_articles
+from backend.app.domain.models import Article, User, UserCredentials
+from backend.app.infrastructure.db.seed_data import demo_password, demo_users, roles, seed_articles
+from backend.app.infrastructure.security.passwords import PBKDF2PasswordHasher
 from backend.app.shared.config import get_settings
 
 
 settings = get_settings()
 database_path = settings.database_path
+password_hasher = PBKDF2PasswordHasher()
 
 
 def _connect() -> sqlite3.Connection:
@@ -60,6 +64,25 @@ def _parse_json_list(value: str | None) -> list[str]:
         return []
 
     return [item for item in parsed_value if isinstance(item, str)]
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _to_iso_datetime(value: datetime) -> str:
+    return value.isoformat(timespec="seconds")
+
+
+def _table_columns(connection: sqlite3.Connection, table_name: str) -> set[str]:
+    return {row["name"] for row in connection.execute(f"PRAGMA table_info({table_name})").fetchall()}
+
+
+def _run_schema_migrations(connection: sqlite3.Connection) -> None:
+    user_columns = _table_columns(connection, "users")
+
+    if "password_hash" not in user_columns:
+        connection.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
 
 
 def _to_api_article(connection: sqlite3.Connection, article_row: sqlite3.Row) -> Article:
@@ -217,7 +240,15 @@ def init_database() -> None:
               id TEXT PRIMARY KEY,
               name TEXT NOT NULL,
               email TEXT NOT NULL UNIQUE,
-              role_id TEXT NOT NULL REFERENCES roles(id)
+              role_id TEXT NOT NULL REFERENCES roles(id),
+              password_hash TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS user_sessions (
+              token TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              created_at TEXT NOT NULL,
+              expires_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS articles (
@@ -254,17 +285,27 @@ def init_database() -> None:
             );
             """
         )
+        _run_schema_migrations(connection)
 
 
 def seed_database(reset: bool = False) -> None:
     with _transaction() as connection:
         if reset:
+            connection.execute("DELETE FROM user_sessions")
             connection.execute("DELETE FROM articles")
             connection.execute("DELETE FROM users")
             connection.execute("DELETE FROM roles")
 
         user_count = connection.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
-        if not reset and user_count > 0:
+        missing_password_hash_count = connection.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM users
+            WHERE password_hash IS NULL OR password_hash = ''
+            """
+        ).fetchone()["count"]
+
+        if not reset and user_count > 0 and missing_password_hash_count == 0:
             return
 
         for role in roles:
@@ -275,8 +316,22 @@ def seed_database(reset: bool = False) -> None:
 
         for user in demo_users:
             connection.execute(
-                "INSERT OR REPLACE INTO users (id, name, email, role_id) VALUES (?, ?, ?, ?)",
-                (user["id"], user["name"], user["email"], user["role"]),
+                """
+                INSERT INTO users (id, name, email, role_id, password_hash)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  name = excluded.name,
+                  email = excluded.email,
+                  role_id = excluded.role_id,
+                  password_hash = excluded.password_hash
+                """,
+                (
+                    user["id"],
+                    user["name"],
+                    user["email"],
+                    user["role"],
+                    password_hasher.hash(demo_password),
+                ),
             )
 
         for article in seed_articles:
@@ -351,6 +406,19 @@ def _to_user(row: sqlite3.Row | None) -> User | None:
     }
 
 
+def _to_user_credentials(row: sqlite3.Row | None) -> UserCredentials | None:
+    if not row:
+        return None
+
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "email": row["email"],
+        "role": row["role"],
+        "passwordHash": row["password_hash"],
+    }
+
+
 def get_user_by_id(user_id: str) -> User | None:
     with _connection() as connection:
         row = connection.execute(
@@ -365,25 +433,41 @@ def get_user_by_id(user_id: str) -> User | None:
         return _to_user(row)
 
 
-def get_user_by_email(email: str) -> User | None:
+def get_user_by_session_token(token: str) -> User | None:
     with _connection() as connection:
         row = connection.execute(
             """
             SELECT users.id, users.name, users.email, users.role_id AS role
+            FROM user_sessions
+            JOIN users ON users.id = user_sessions.user_id
+            WHERE user_sessions.token = ?
+              AND user_sessions.expires_at > ?
+            """,
+            (token, _to_iso_datetime(_utc_now())),
+        ).fetchone()
+
+        return _to_user(row)
+
+
+def get_user_credentials_by_email(email: str) -> UserCredentials | None:
+    with _connection() as connection:
+        row = connection.execute(
+            """
+            SELECT users.id, users.name, users.email, users.role_id AS role, users.password_hash
             FROM users
             WHERE LOWER(users.email) = LOWER(?)
             """,
             (email,),
         ).fetchone()
 
-        return _to_user(row)
+        return _to_user_credentials(row)
 
 
-def get_user_by_role(role: str) -> User | None:
+def get_user_credentials_by_role(role: str) -> UserCredentials | None:
     with _connection() as connection:
         row = connection.execute(
             """
-            SELECT users.id, users.name, users.email, users.role_id AS role
+            SELECT users.id, users.name, users.email, users.role_id AS role, users.password_hash
             FROM users
             WHERE users.role_id = ?
             ORDER BY users.id ASC
@@ -392,7 +476,30 @@ def get_user_by_role(role: str) -> User | None:
             (role,),
         ).fetchone()
 
-        return _to_user(row)
+        return _to_user_credentials(row)
+
+
+def create_user_session(user_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    now = _utc_now()
+    expires_at = now + timedelta(days=7)
+
+    with _transaction() as connection:
+        connection.execute(
+            """
+            INSERT INTO user_sessions (token, user_id, created_at, expires_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (token, user_id, _to_iso_datetime(now), _to_iso_datetime(expires_at)),
+        )
+
+    return token
+
+
+def delete_user_session(token: str) -> bool:
+    with _transaction() as connection:
+        cursor = connection.execute("DELETE FROM user_sessions WHERE token = ?", (token,))
+        return cursor.rowcount > 0
 
 
 def table_counts() -> dict[str, Any]:
@@ -400,4 +507,5 @@ def table_counts() -> dict[str, Any]:
         return {
             "users": connection.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"],
             "articles": connection.execute("SELECT COUNT(*) AS count FROM articles").fetchone()["count"],
+            "sessions": connection.execute("SELECT COUNT(*) AS count FROM user_sessions").fetchone()["count"],
         }

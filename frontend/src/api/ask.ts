@@ -1,4 +1,3 @@
-import type { CurrentUser } from '../types'
 import { apiRequest } from './client'
 
 export type AskSource = {
@@ -13,10 +12,10 @@ export type AskResponse = {
   sources: AskSource[]
 }
 
-export function askApi(currentUser: CurrentUser, question: string) {
+export function askApi(token: string, question: string) {
   return apiRequest<AskResponse>('/ask', {
     body: { question },
     method: 'POST',
-    token: currentUser.id,
+    token,
   })
 }

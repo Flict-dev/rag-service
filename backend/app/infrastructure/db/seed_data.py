@@ -4,6 +4,8 @@ roles = [
     {"id": "admin", "name": "Администратор"},
 ]
 
+demo_password = "demo-password"
+
 demo_users = [
     {
         "id": "demo-reader",

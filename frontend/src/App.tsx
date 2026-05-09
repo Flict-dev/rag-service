@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import { createApiArticle, deleteApiArticle, fetchApiArticles, updateApiArticle } from './api/articles'
-import { loginApi } from './api/auth'
+import { loginApi, logoutApi } from './api/auth'
 import Topbar from './components/Topbar'
 import { demoUsers } from './data/demoData'
 import {
@@ -10,11 +10,11 @@ import {
   resetArticles as resetStoredArticles,
   saveArticles,
 } from './lib/articleStore'
-import { clearCurrentUser, loadCurrentUser, saveCurrentUser } from './lib/storage'
+import { clearSession, loadSession, saveSession } from './lib/storage'
 import AuthScreen from './screens/AuthScreen'
 import DocsScreen from './screens/DocsScreen'
 import LandingPage from './screens/LandingPage'
-import type { AuthMode, CurrentUser, KnowledgeArticle, UserRole } from './types'
+import type { AuthMode, AuthSession, KnowledgeArticle, UserRole } from './types'
 
 type NavigationState = {
   from?: {
@@ -26,7 +26,7 @@ type NavigationState = {
 
 function App() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('editor')
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => loadCurrentUser())
+  const [session, setSession] = useState<AuthSession | null>(() => loadSession())
   const [articles, setArticles] = useState(() => loadArticles())
   const [articlesLoading, setArticlesLoading] = useState(false)
   const [articlesError, setArticlesError] = useState<string | null>(null)
@@ -34,13 +34,15 @@ function App() {
   const [authError, setAuthError] = useState<string | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
+  const currentUser = session?.user ?? null
+  const authToken = session?.token ?? null
 
   useEffect(() => {
     saveArticles(articles)
   }, [articles])
 
   useEffect(() => {
-    if (!currentUser) {
+    if (!currentUser || !authToken) {
       return
     }
 
@@ -56,7 +58,7 @@ function App() {
         setArticlesError(null)
 
         try {
-          const apiArticles = await fetchApiArticles(currentUser)
+          const apiArticles = await fetchApiArticles(authToken)
 
           if (ignoreResult) {
             return
@@ -81,7 +83,7 @@ function App() {
     return () => {
       ignoreResult = true
     }
-  }, [currentUser])
+  }, [authToken, currentUser])
 
   const openAuth = (mode: AuthMode) => {
     navigate(mode === 'signup' ? '/signup' : '/login')
@@ -115,6 +117,7 @@ function App() {
     const selectedDemoUser =
       demoUsers.find((user) => user.role === selectedRole) ?? demoUsers[1]
     const email = String(formData.get('email') || selectedDemoUser.email)
+    const password = String(formData.get('password') || 'demo-password')
     const name =
       authMode === 'signup'
         ? String(formData.get('name') || 'Новый редактор')
@@ -123,33 +126,34 @@ function App() {
     setAuthSubmitting(true)
     setAuthError(null)
 
-    let nextUser: CurrentUser
+    let nextSession: AuthSession
 
     try {
       if (authMode === 'signin') {
-        const session = await loginApi({ email, role: selectedRole })
-        nextUser = session.user
+        nextSession = await loginApi({ email, password, role: selectedRole })
       } else {
-        nextUser = {
+        const localUser = {
           id: `local-${selectedRole}-${Date.now()}`,
           email,
           name,
           role: selectedRole,
         }
+        nextSession = { token: localUser.id, user: localUser }
       }
 
-      saveCurrentUser(nextUser)
-      setCurrentUser(nextUser)
+      saveSession(nextSession)
+      setSession(nextSession)
     } catch {
-      nextUser = {
+      const localUser = {
         id: authMode === 'signup' ? `local-${selectedRole}-${Date.now()}` : selectedDemoUser.id,
         email,
         name,
         role: authMode === 'signup' ? selectedRole : selectedDemoUser.role,
       }
+      nextSession = { token: localUser.id, user: localUser }
 
-      saveCurrentUser(nextUser)
-      setCurrentUser(nextUser)
+      saveSession(nextSession)
+      setSession(nextSession)
       setAuthError('Backend недоступен, поэтому вход выполнен в демо-режиме.')
     } finally {
       setAuthSubmitting(false)
@@ -166,8 +170,12 @@ function App() {
   }
 
   const signOut = () => {
-    clearCurrentUser()
-    setCurrentUser(null)
+    if (authToken) {
+      void logoutApi(authToken).catch(() => undefined)
+    }
+
+    clearSession()
+    setSession(null)
     setAuthError(null)
     setArticlesError(null)
     setArticlesLoading(false)
@@ -196,7 +204,7 @@ function App() {
   }
 
   const saveArticle = async (article: KnowledgeArticle) => {
-    if (!currentUser) {
+    if (!currentUser || !authToken) {
       saveArticleLocally(article)
       return article
     }
@@ -205,8 +213,8 @@ function App() {
 
     try {
       const savedArticle = articleExists
-        ? await updateApiArticle(currentUser, article)
-        : await createApiArticle(currentUser, article)
+        ? await updateApiArticle(authToken, article)
+        : await createApiArticle(authToken, article)
 
       saveArticleLocally(savedArticle)
       setArticlesError(null)
@@ -225,13 +233,13 @@ function App() {
   }
 
   const deleteArticle = async (articleId: string) => {
-    if (!currentUser) {
+    if (!currentUser || !authToken) {
       deleteArticleLocally(articleId)
       return
     }
 
     try {
-      await deleteApiArticle(currentUser, articleId)
+      await deleteApiArticle(authToken, articleId)
       setArticlesError(null)
     } catch {
       setArticlesError('Не удалось удалить статью в backend, она удалена только локально.')
@@ -297,6 +305,7 @@ function App() {
                 articles={articles}
                 articlesError={articlesError}
                 articlesLoading={articlesLoading}
+                authToken={authToken}
                 currentUser={currentUser}
                 onDeleteArticle={deleteArticle}
                 onResetArticles={resetArticles}
@@ -315,6 +324,7 @@ function App() {
                 articles={articles}
                 articlesError={articlesError}
                 articlesLoading={articlesLoading}
+                authToken={authToken}
                 currentUser={currentUser}
                 onDeleteArticle={deleteArticle}
                 onResetArticles={resetArticles}

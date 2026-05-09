@@ -24,7 +24,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   }
 
   if (options.token) {
-    headers.set('x-user-id', options.token)
+    headers.set('authorization', `Bearer ${options.token}`)
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {

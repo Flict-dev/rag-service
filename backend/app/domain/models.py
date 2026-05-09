@@ -9,4 +9,5 @@ VALID_STATUSES: set[str] = {"draft", "review", "published"}
 DEFAULT_ACCESS: list[UserRole] = ["reader", "editor", "admin"]
 
 User: TypeAlias = dict[str, str]
+UserCredentials: TypeAlias = dict[str, str]
 Article: TypeAlias = dict[str, object]

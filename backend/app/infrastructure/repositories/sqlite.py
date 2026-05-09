@@ -1,4 +1,4 @@
-from backend.app.domain.models import Article, User
+from backend.app.domain.models import Article, User, UserCredentials
 from backend.app.infrastructure.db import database
 
 
@@ -18,8 +18,17 @@ class SQLiteKnowledgeRepository:
     def get_user_by_id(self, user_id: str) -> User | None:
         return database.get_user_by_id(user_id)
 
-    def get_user_by_email(self, email: str) -> User | None:
-        return database.get_user_by_email(email)
+    def get_user_by_session_token(self, token: str) -> User | None:
+        return database.get_user_by_session_token(token)
 
-    def get_user_by_role(self, role: str) -> User | None:
-        return database.get_user_by_role(role)
+    def get_user_credentials_by_email(self, email: str) -> UserCredentials | None:
+        return database.get_user_credentials_by_email(email)
+
+    def get_user_credentials_by_role(self, role: str) -> UserCredentials | None:
+        return database.get_user_credentials_by_role(role)
+
+    def create_user_session(self, user_id: str) -> str:
+        return database.create_user_session(user_id)
+
+    def delete_user_session(self, token: str) -> bool:
+        return database.delete_user_session(token)

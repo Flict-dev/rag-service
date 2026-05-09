@@ -12,14 +12,22 @@ def get_repository() -> KnowledgeRepository:
     return SQLiteKnowledgeRepository()
 
 
-async def require_user(
+def get_auth_token(
     authorization: Annotated[str | None, Header()] = None,
     x_user_id: Annotated[str | None, Header(alias="X-User-Id")] = None,
+) -> str | None:
+    bearer_token = authorization[7:] if authorization and authorization.startswith("Bearer ") else ""
+    return x_user_id or bearer_token or None
+
+
+async def require_user(
+    token: str | None = Depends(get_auth_token),
     repository: KnowledgeRepository = Depends(get_repository),
 ) -> User:
-    bearer_user_id = authorization[7:] if authorization and authorization.startswith("Bearer ") else ""
-    user_id = x_user_id or bearer_user_id
-    user = repository.get_user_by_id(user_id) if user_id else None
+    user = repository.get_user_by_session_token(token) if token else None
+
+    if not user and token:
+        user = repository.get_user_by_id(token)
 
     if not user:
         raise AuthError("Auth required")

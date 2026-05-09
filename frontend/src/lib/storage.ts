@@ -1,10 +1,11 @@
-import type { CurrentUser, UserRole } from '../types'
+import type { AuthSession, CurrentUser, UserRole } from '../types'
 
 const CURRENT_USER_STORAGE_KEY = 'rag-base/current-user/v1'
 const STORAGE_VERSION = 1
 const USER_ROLES = new Set<UserRole>(['reader', 'editor', 'admin'])
 
 type StoredCurrentUser = {
+  token?: string
   version: typeof STORAGE_VERSION
   user: CurrentUser
 }
@@ -40,7 +41,7 @@ function normalizeUser(value: unknown): CurrentUser | null {
   }
 }
 
-export function loadCurrentUser() {
+export function loadSession(): AuthSession | null {
   if (!hasLocalStorage()) {
     return null
   }
@@ -54,30 +55,49 @@ export function loadCurrentUser() {
 
     const parsedValue = JSON.parse(rawValue) as Partial<StoredCurrentUser> | CurrentUser
     const userCandidate = 'user' in parsedValue ? parsedValue.user : parsedValue
+    const user = normalizeUser(userCandidate)
 
-    return normalizeUser(userCandidate)
+    if (!user) {
+      return null
+    }
+
+    return {
+      token: 'token' in parsedValue && typeof parsedValue.token === 'string' ? parsedValue.token : user.id,
+      user,
+    }
   } catch {
     return null
   }
 }
 
-export function saveCurrentUser(user: CurrentUser) {
+export function loadCurrentUser() {
+  return loadSession()?.user ?? null
+}
+
+export function saveSession(session: AuthSession) {
   if (!hasLocalStorage()) {
     return
   }
 
   const storedUser: StoredCurrentUser = {
+    token: session.token,
     version: STORAGE_VERSION,
-    user,
+    user: session.user,
   }
 
   window.localStorage.setItem(CURRENT_USER_STORAGE_KEY, JSON.stringify(storedUser))
 }
 
-export function clearCurrentUser() {
+export function saveCurrentUser(user: CurrentUser) {
+  saveSession({ token: user.id, user })
+}
+
+export function clearSession() {
   if (!hasLocalStorage()) {
     return
   }
 
   window.localStorage.removeItem(CURRENT_USER_STORAGE_KEY)
 }
+
+export const clearCurrentUser = clearSession

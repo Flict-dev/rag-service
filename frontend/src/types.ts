@@ -9,6 +9,11 @@ export type CurrentUser = {
   role: UserRole
 }
 
+export type AuthSession = {
+  token: string
+  user: CurrentUser
+}
+
 export type ArticleSection = {
   heading: string
   paragraphs: string[]

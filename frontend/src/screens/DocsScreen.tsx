@@ -26,6 +26,7 @@ type DocsScreenProps = {
   articles: KnowledgeArticle[]
   articlesError?: string | null
   articlesLoading?: boolean
+  authToken: string | null
   currentUser: CurrentUser
   onDeleteArticle: (articleId: string) => Promise<void> | void
   onResetArticles: () => KnowledgeArticle[]
@@ -68,6 +69,7 @@ function DocsScreen({
   articles,
   articlesError,
   articlesLoading = false,
+  authToken,
   currentUser,
   onDeleteArticle,
   onResetArticles,
@@ -168,7 +170,7 @@ function DocsScreen({
     setAskError(null)
 
     try {
-      const answer = await askApi(currentUser, question)
+      const answer = await askApi(authToken ?? currentUser.id, question)
       setAskAnswer(answer)
     } catch {
       setAskError('Не удалось получить ответ из backend.')

@@ -3,12 +3,15 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, Query, Response, status
 from pydantic import BaseModel
 
-from backend.app.api.dependencies import get_repository, require_user
+from backend.app.api.dependencies import get_auth_token, get_repository, require_user
 from backend.app.application.ports.repositories import KnowledgeRepository
+from backend.app.application.ports.security import PasswordHasher
 from backend.app.application.use_cases.articles import ArticleUseCases
 from backend.app.application.use_cases.auth import login as login_user
+from backend.app.application.use_cases.auth import logout as logout_user
 from backend.app.application.use_cases.qa import QaUseCases
 from backend.app.domain.models import User, UserRole
+from backend.app.infrastructure.security.passwords import PBKDF2PasswordHasher
 
 
 router = APIRouter()
@@ -16,11 +19,16 @@ router = APIRouter()
 
 class LoginRequest(BaseModel):
     email: str | None = None
+    password: str | None = None
     role: UserRole | None = None
 
 
 class AskRequest(BaseModel):
     question: str | None = None
+
+
+def get_password_hasher() -> PasswordHasher:
+    return PBKDF2PasswordHasher()
 
 
 @router.get("/health")
@@ -31,9 +39,19 @@ async def health() -> dict[str, str]:
 @router.post("/auth/login")
 async def login(
     payload: LoginRequest,
+    password_hasher: PasswordHasher = Depends(get_password_hasher),
     repository: KnowledgeRepository = Depends(get_repository),
 ) -> dict[str, object]:
-    return login_user(repository, payload.email, payload.role)
+    return login_user(repository, password_hasher, payload.email, payload.role, payload.password)
+
+
+@router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    token: str | None = Depends(get_auth_token),
+    repository: KnowledgeRepository = Depends(get_repository),
+) -> Response:
+    logout_user(repository, token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me")

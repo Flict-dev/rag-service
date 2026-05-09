@@ -43,7 +43,8 @@ npm run backend:dev
 - `editor@ragbase.local`
 - `admin@ragbase.local`
 
-Пароль в демо-форме не проверяется; backend выбирает демо-пользователя по email или роли.
+Backend проверяет пароль по PBKDF2-хэшу. Пароль демо-пользователей: `demo-password`.
+После входа backend выдаёт session token, frontend хранит его локально и отправляет в `Authorization: Bearer <token>`.
 
 ## Переменные окружения
 
