@@ -252,11 +252,13 @@
 }
 
 .trust-row span {
-  gap: 6px;
-}
-
-.trust-row svg {
-  color: #1d7a4f;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(24, 24, 21, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .product-preview {
@@ -629,26 +631,9 @@ kbd {
   color: #ffffff;
 }
 
-.feature-icon {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border: 1px solid #cddfd3;
-  border-radius: 8px;
-  background: #f0f8f2;
-  color: #1b6b45;
-}
-
-.feature-icon.warm {
-  border-color: #f0c66f;
-  background: #fff4d7;
-  color: #8a5a11;
-}
-
 .bento-card h3,
 .access-mode h3 {
-  margin: 18px 0 10px;
+  margin: 0 0 10px;
   color: var(--ink);
   font-size: 20px;
 }
@@ -693,16 +678,6 @@ kbd {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 18px 48px rgba(24, 24, 21, 0.07);
-}
-
-.access-mode > span {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 8px;
-  background: #171715;
-  color: #ffffff;
 }
 
 .workflow-panel {
