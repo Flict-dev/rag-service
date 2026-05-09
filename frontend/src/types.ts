@@ -1,6 +1,8 @@
 export type AuthMode = 'signin' | 'signup'
 export type UserRole = 'reader' | 'editor' | 'admin'
 export type ArticleStatus = 'draft' | 'review' | 'published'
+export type DocumentStatus = 'queued' | 'processing' | 'indexed' | 'failed'
+export type IngestionJobStatus = 'queued' | 'processing' | 'completed' | 'failed'
 
 export type CurrentUser = {
   id: string
@@ -33,6 +35,28 @@ export type KnowledgeArticle = {
   access: UserRole[]
   tags: string[]
   sections: ArticleSection[]
+}
+
+export type KnowledgeDocument = {
+  id: string
+  filename: string
+  contentType: string
+  sizeBytes: number
+  storagePath: string
+  uploadedBy: string
+  uploadedAt: string
+  status: DocumentStatus
+  metadata: Record<string, object>
+}
+
+export type IngestionJob = {
+  id: string
+  documentId: string
+  status: IngestionJobStatus
+  createdAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  error: string | null
 }
 
 export type EditorAccess = {

@@ -1226,6 +1226,7 @@ kbd {
 
 .toc-card,
 .access-card,
+.documents-card,
 .reset-card {
   padding: 16px;
   border: 1px solid var(--line);
@@ -1248,6 +1249,7 @@ kbd {
 }
 
 .access-card,
+.documents-card,
 .reset-card {
   margin-top: 16px;
 }
@@ -1258,7 +1260,14 @@ kbd {
   font-size: 17px;
 }
 
+.documents-card h3 {
+  margin: 8px 0 0;
+  color: var(--ink);
+  font-size: 17px;
+}
+
 .access-card p,
+.documents-card p,
 .reset-card p {
   margin: 0;
   color: var(--muted);
@@ -1280,6 +1289,121 @@ kbd {
   font: inherit;
   font-size: 14px;
   font-weight: 800;
+}
+
+.documents-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.documents-card-heading .icon-button {
+  width: 34px;
+  height: 34px;
+}
+
+.documents-card-heading .icon-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.document-file-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.document-file-field input {
+  width: 100%;
+  min-width: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.documents-card .primary-button {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.document-job-state {
+  margin-top: 12px;
+  color: #16805d;
+  font-weight: 800;
+}
+
+.document-error {
+  margin-top: 12px;
+  color: #8b2f24;
+  font-weight: 800;
+}
+
+.documents-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.document-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.document-row svg {
+  margin-top: 2px;
+  color: #174ea6;
+}
+
+.document-row strong,
+.document-row span {
+  min-width: 0;
+}
+
+.document-row strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.document-row span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.document-status {
+  grid-column: 2;
+  justify-self: start;
+  padding: 5px 8px;
+  border: 1px solid #bfd5ff;
+  border-radius: 8px;
+  background: #edf5ff;
+  color: #174ea6;
+}
+
+.document-status-indexed {
+  border-color: #b7d8c4;
+  background: #f1fbf5;
+  color: #1c6040;
+}
+
+.document-status-failed {
+  border-color: #efc8c4;
+  background: #fff5f2;
+  color: #8b2f24;
 }
 
 .reset-card button {

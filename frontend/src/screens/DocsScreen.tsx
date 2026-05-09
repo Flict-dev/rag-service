@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
-import { BookOpen, Edit3, FileText, Plus, RefreshCcw, Search } from 'lucide-react'
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { BookOpen, Edit3, FileText, Plus, RefreshCcw, Search, Upload } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { askApi, type AskResponse } from '../api/ask'
+import { fetchApiDocuments, uploadApiDocument } from '../api/documents'
 import ArticleEditorForm from '../components/ArticleEditorForm'
 import SearchDialog from '../components/SearchDialog'
 import { articleStatusLabels, editorAccess, roleLabels } from '../data/demoData'
 import { formatArticleDate, groupArticlesByGroup } from '../lib/articles'
 import { searchArticles } from '../lib/search'
-import type { ArticleStatus, CurrentUser, KnowledgeArticle } from '../types'
+import type { ArticleStatus, CurrentUser, IngestionJob, KnowledgeArticle, KnowledgeDocument } from '../types'
 
 type EditorMode = 'view' | 'edit' | 'create'
 type EditorState =
@@ -31,6 +32,20 @@ type DocsScreenProps = {
   onDeleteArticle: (articleId: string) => Promise<void> | void
   onResetArticles: () => KnowledgeArticle[]
   onSaveArticle: (article: KnowledgeArticle) => Promise<KnowledgeArticle> | KnowledgeArticle
+}
+
+const documentStatusLabels: Record<KnowledgeDocument['status'], string> = {
+  queued: 'В очереди',
+  processing: 'Индексируется',
+  indexed: 'Проиндексирован',
+  failed: 'Ошибка',
+}
+
+const ingestionJobStatusLabels: Record<IngestionJob['status'], string> = {
+  queued: 'В очереди',
+  processing: 'В работе',
+  completed: 'Готово',
+  failed: 'Ошибка',
 }
 
 function slugifyArticleTitle(title: string) {
@@ -65,6 +80,18 @@ function canCreateArticles(currentUser: CurrentUser) {
   return currentUser.role === 'editor' || currentUser.role === 'admin'
 }
 
+function formatFileSize(sizeBytes: number) {
+  if (sizeBytes < 1024) {
+    return `${sizeBytes} Б`
+  }
+
+  if (sizeBytes < 1024 * 1024) {
+    return `${(sizeBytes / 1024).toFixed(1)} КБ`
+  }
+
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} МБ`
+}
+
 function DocsScreen({
   articles,
   articlesError,
@@ -80,7 +107,14 @@ function DocsScreen({
   const [askAnswer, setAskAnswer] = useState<AskResponse | null>(null)
   const [askError, setAskError] = useState<string | null>(null)
   const [askLoading, setAskLoading] = useState(false)
+  const [documents, setDocuments] = useState<KnowledgeDocument[]>([])
+  const [documentsError, setDocumentsError] = useState<string | null>(null)
+  const [documentsLoading, setDocumentsLoading] = useState(false)
+  const [documentUploading, setDocumentUploading] = useState(false)
+  const [lastIngestionJob, setLastIngestionJob] = useState<IngestionJob | null>(null)
+  const [selectedDocumentFile, setSelectedDocumentFile] = useState<File | null>(null)
   const [editorState, setEditorState] = useState<EditorState>({ mode: 'view' })
+  const documentFileInputRef = useRef<HTMLInputElement | null>(null)
   const navigate = useNavigate()
   const { articleId } = useParams<{ articleId: string }>()
   const fallbackArticle = articles[0] ?? null
@@ -98,6 +132,7 @@ function DocsScreen({
   )
 
   const canCreate = canCreateArticles(currentUser)
+  const canManageDocuments = canCreate
   const canEdit =
     selectedArticle && canCreate
       ? currentUser.role === 'admin' ||
@@ -121,6 +156,50 @@ function DocsScreen({
       navigate(`/docs/${fallbackArticle.id}`, { replace: true })
     }
   }, [articleId, articles, fallbackArticle, navigate])
+
+  useEffect(() => {
+    if (!canManageDocuments || !authToken) {
+      return
+    }
+
+    let ignoreResult = false
+
+    Promise.resolve()
+      .then(async () => {
+        if (ignoreResult) {
+          return
+        }
+
+        setDocumentsLoading(true)
+        setDocumentsError(null)
+
+        try {
+          const apiDocuments = await fetchApiDocuments(authToken)
+
+          if (ignoreResult) {
+            return
+          }
+
+          setDocuments(apiDocuments)
+          setDocumentsError(null)
+        } catch {
+          if (ignoreResult) {
+            return
+          }
+
+          setDocuments([])
+          setDocumentsError('Не удалось загрузить список документов из backend.')
+        }
+
+        if (!ignoreResult) {
+          setDocumentsLoading(false)
+        }
+      })
+
+    return () => {
+      ignoreResult = true
+    }
+  }, [authToken, canManageDocuments])
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -149,6 +228,60 @@ function DocsScreen({
 
     if (nextArticleId) {
       navigate(`/docs/${nextArticleId}`, { replace: true })
+    }
+  }
+
+  const refreshDocuments = async () => {
+    if (!authToken || !canManageDocuments) {
+      return
+    }
+
+    setDocumentsLoading(true)
+    setDocumentsError(null)
+
+    try {
+      const apiDocuments = await fetchApiDocuments(authToken)
+      setDocuments(apiDocuments)
+      setDocumentsError(null)
+    } catch {
+      setDocumentsError('Не удалось обновить список документов.')
+    } finally {
+      setDocumentsLoading(false)
+    }
+  }
+
+  const selectDocumentFile = (event: ChangeEvent<HTMLInputElement>) => {
+    setSelectedDocumentFile(event.target.files?.[0] ?? null)
+    setLastIngestionJob(null)
+  }
+
+  const uploadDocument = async () => {
+    if (!authToken || !canManageDocuments || !selectedDocumentFile) {
+      return
+    }
+
+    setDocumentUploading(true)
+    setDocumentsError(null)
+    setLastIngestionJob(null)
+
+    try {
+      const result = await uploadApiDocument(authToken, selectedDocumentFile)
+      setDocuments((currentDocuments) => [
+        result.document,
+        ...currentDocuments.filter((document) => document.id !== result.document.id),
+      ])
+      setLastIngestionJob(result.job)
+      setSelectedDocumentFile(null)
+
+      if (documentFileInputRef.current) {
+        documentFileInputRef.current.value = ''
+      }
+
+      await refreshDocuments()
+    } catch {
+      setDocumentsError('Не удалось загрузить документ в backend.')
+    } finally {
+      setDocumentUploading(false)
     }
   }
 
@@ -436,6 +569,73 @@ function DocsScreen({
                 </div>
               </>
             )
+          )}
+
+          {canManageDocuments && (
+            <div className="documents-card">
+              <div className="documents-card-heading">
+                <div>
+                  <span className="sidebar-label">Документы RAG</span>
+                  <h3>Загрузка и индекс</h3>
+                </div>
+                <button
+                  aria-label="Обновить документы"
+                  className="icon-button"
+                  disabled={documentsLoading || documentUploading}
+                  onClick={refreshDocuments}
+                  type="button"
+                >
+                  <RefreshCcw aria-hidden="true" size={16} />
+                </button>
+              </div>
+
+              <label className="document-file-field">
+                <span>Файл</span>
+                <input ref={documentFileInputRef} onChange={selectDocumentFile} type="file" />
+              </label>
+
+              <button
+                className="primary-button compact"
+                disabled={!selectedDocumentFile || documentUploading}
+                onClick={uploadDocument}
+                type="button"
+              >
+                <Upload aria-hidden="true" size={16} />
+                <span>{documentUploading ? 'Загружаем...' : 'Загрузить'}</span>
+              </button>
+
+              {lastIngestionJob && (
+                <p className="document-job-state" aria-live="polite">
+                  Ingestion job: {ingestionJobStatusLabels[lastIngestionJob.status]}
+                </p>
+              )}
+
+              {documentsError && (
+                <p className="document-error" role="alert">
+                  {documentsError}
+                </p>
+              )}
+
+              <div className="documents-list" aria-live="polite">
+                {documentsLoading && <p>Загружаем документы...</p>}
+                {!documentsLoading && documents.length === 0 && <p>Документов пока нет.</p>}
+                {!documentsLoading &&
+                  documents.map((document) => (
+                    <div className="document-row" key={document.id}>
+                      <FileText aria-hidden="true" size={16} />
+                      <div>
+                        <strong>{document.filename}</strong>
+                        <span>
+                          {formatFileSize(document.sizeBytes)} · {formatArticleDate(document.uploadedAt)}
+                        </span>
+                      </div>
+                      <span className={`document-status document-status-${document.status}`}>
+                        {documentStatusLabels[document.status]}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
           )}
 
           <div className="reset-card">

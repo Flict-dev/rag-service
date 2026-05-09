@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:4000'
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:4000'
 
 type ApiRequestOptions = {
   body?: unknown
@@ -39,6 +39,23 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
   if (response.status === 204) {
     return undefined as T
+  }
+
+  return (await response.json()) as T
+}
+
+export async function apiFormRequest<T>(path: string, formData: FormData, token: string) {
+  const headers = new Headers()
+  headers.set('authorization', `Bearer ${token}`)
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    body: formData,
+    headers,
+    method: 'POST',
+  })
+
+  if (!response.ok) {
+    throw new ApiError(`API request failed with status ${response.status}`, response.status)
   }
 
   return (await response.json()) as T
