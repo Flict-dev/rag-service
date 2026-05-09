@@ -1,4 +1,4 @@
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, String, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -124,6 +124,11 @@ class Document(Base):
         back_populates="document",
         cascade="all, delete-orphan",
     )
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        order_by="DocumentChunk.position",
+    )
 
 
 class IngestionJob(Base):
@@ -144,3 +149,18 @@ class IngestionJob(Base):
     error: Mapped[str | None] = mapped_column(Text)
 
     document: Mapped[Document] = relationship(back_populates="ingestion_jobs")
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        UniqueConstraint("document_id", "position", name="document_chunks_document_position_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
+    document: Mapped[Document] = relationship(back_populates="chunks")

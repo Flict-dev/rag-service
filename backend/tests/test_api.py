@@ -142,6 +142,55 @@ def test_ask_requires_question(client: TestClient) -> None:
     assert response.json() == {"error": "question is required"}
 
 
+def test_uploaded_text_document_becomes_rag_source_for_editors(client: TestClient) -> None:
+    editor_token = login(client, "editor@ragbase.local")
+    reader_token = login(client, "reader@ragbase.local")
+
+    upload_response = client.post(
+        "/documents",
+        files={
+            "file": (
+                "runbook.txt",
+                b"Phoenix escalation marker lives only in this uploaded document.",
+                "text/plain",
+            )
+        },
+        headers=auth_headers(editor_token),
+    )
+    assert upload_response.status_code == 201
+
+    search_response = client.get(
+        "/search",
+        params={"q": "Phoenix escalation marker"},
+        headers=auth_headers(editor_token),
+    )
+    assert search_response.status_code == 200
+    document_results = search_response.json()["documentResults"]
+    assert document_results[0]["chunk"]["documentFilename"] == "runbook.txt"
+
+    editor_response = client.post(
+        "/ask",
+        json={"question": "Phoenix escalation marker"},
+        headers=auth_headers(editor_token),
+    )
+    assert editor_response.status_code == 200
+    assert editor_response.json()["sources"] == [
+        {
+            "documentId": upload_response.json()["document"]["id"],
+            "sectionHeading": "Документ, фрагмент 1",
+            "title": "runbook.txt",
+        }
+    ]
+
+    reader_response = client.post(
+        "/ask",
+        json={"question": "Phoenix escalation marker"},
+        headers=auth_headers(reader_token),
+    )
+    assert reader_response.status_code == 200
+    assert reader_response.json()["sources"] == []
+
+
 def test_document_upload_creates_completed_ingestion_job(client: TestClient) -> None:
     editor_token = login(client, "editor@ragbase.local")
 
@@ -166,6 +215,7 @@ def test_document_upload_creates_completed_ingestion_job(client: TestClient) -> 
     documents_response = client.get("/documents", headers=auth_headers(editor_token))
     assert documents_response.status_code == 200
     assert documents_response.json()["documents"][0]["status"] == "indexed"
+    assert documents_response.json()["documents"][0]["metadata"]["chunkCount"] == 1
 
 
 def test_reader_cannot_upload_documents(client: TestClient) -> None:

@@ -1,10 +1,18 @@
 import { apiRequest } from './client'
 
-export type AskSource = {
+type ArticleAskSource = {
   articleId: string
   sectionHeading: string
   title: string
 }
+
+type DocumentAskSource = {
+  documentId: string
+  sectionHeading: string
+  title: string
+}
+
+export type AskSource = ArticleAskSource | DocumentAskSource
 
 export type AskResponse = {
   answer: string

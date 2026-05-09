@@ -46,7 +46,7 @@ export type KnowledgeDocument = {
   uploadedBy: string
   uploadedAt: string
   status: DocumentStatus
-  metadata: Record<string, object>
+  metadata: Record<string, unknown>
 }
 
 export type IngestionJob = {

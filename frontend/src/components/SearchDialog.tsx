@@ -35,6 +35,12 @@ function HighlightedText({ segments }: HighlightedTextProps) {
   )
 }
 
+function getSourceKey(source: AskResponse['sources'][number]) {
+  return 'articleId' in source
+    ? `${source.articleId}-${source.sectionHeading}`
+    : `${source.documentId}-${source.sectionHeading}`
+}
+
 function SearchDialog({
   answer,
   answerError,
@@ -83,8 +89,13 @@ function SearchDialog({
                 <div>
                   {answer.sources.map((source) => (
                     <button
-                      key={`${source.articleId}-${source.sectionHeading}`}
-                      onClick={() => onSelect(source.articleId)}
+                      disabled={!('articleId' in source)}
+                      key={getSourceKey(source)}
+                      onClick={() => {
+                        if ('articleId' in source) {
+                          onSelect(source.articleId)
+                        }
+                      }}
                       type="button"
                     >
                       <strong>{source.title}</strong>

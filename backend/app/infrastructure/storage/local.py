@@ -16,6 +16,9 @@ class LocalDocumentStorage:
         target_path.write_bytes(content)
         return str(target_path)
 
+    def read(self, storage_path: str) -> bytes:
+        return Path(storage_path).read_bytes()
+
     def _sanitize_filename(self, filename: str) -> str:
         cleaned_filename = Path(filename).name.strip()
         cleaned_filename = re.sub(r"[^A-Za-zА-Яа-я0-9._-]+", "-", cleaned_filename)

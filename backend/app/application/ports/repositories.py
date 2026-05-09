@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from backend.app.domain.models import Article, Document, IngestionJob, User, UserCredentials
+from backend.app.domain.models import Article, Document, DocumentChunk, IngestionJob, User, UserCredentials
 
 
 class UserRepository(Protocol):
@@ -30,9 +30,13 @@ class ArticleRepository(Protocol):
 class DocumentRepository(Protocol):
     def list_documents(self) -> list[Document]: ...
 
+    def get_document_by_id(self, document_id: str) -> Document | None: ...
+
     def create_document(self, document: Document) -> Document: ...
 
     def update_document_status(self, document_id: str, status: str) -> Document | None: ...
+
+    def update_document_metadata(self, document_id: str, metadata: dict[str, object]) -> Document | None: ...
 
     def list_ingestion_jobs(self, document_id: str | None = None) -> list[IngestionJob]: ...
 
@@ -47,6 +51,10 @@ class DocumentRepository(Protocol):
         started_at: str | None = None,
         finished_at: str | None = None,
     ) -> IngestionJob | None: ...
+
+    def replace_document_chunks(self, document_id: str, chunks: list[DocumentChunk]) -> list[DocumentChunk]: ...
+
+    def list_document_chunks(self) -> list[DocumentChunk]: ...
 
 
 class KnowledgeRepository(UserRepository, ArticleRepository, DocumentRepository, Protocol):

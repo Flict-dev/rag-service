@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 from typing import Any
 
-from backend.app.domain.models import Article, Document, IngestionJob, User, UserCredentials
+from backend.app.domain.models import Article, Document, DocumentChunk, IngestionJob, User, UserCredentials
 from backend.app.infrastructure.db.seed_data import demo_password, demo_users, roles, seed_articles
 from backend.app.infrastructure.security.passwords import PBKDF2PasswordHasher
 from backend.app.shared.config import get_settings
@@ -275,6 +275,15 @@ def init_database() -> None:
               metadata_json TEXT NOT NULL DEFAULT '{}'
             );
 
+            CREATE TABLE IF NOT EXISTS document_chunks (
+              id TEXT PRIMARY KEY,
+              document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+              position INTEGER NOT NULL,
+              text TEXT NOT NULL,
+              metadata_json TEXT NOT NULL DEFAULT '{}',
+              UNIQUE(document_id, position)
+            );
+
             CREATE TABLE IF NOT EXISTS ingestion_jobs (
               id TEXT PRIMARY KEY,
               document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
@@ -317,6 +326,9 @@ def init_database() -> None:
               role_id TEXT NOT NULL REFERENCES roles(id),
               PRIMARY KEY (article_id, role_id)
             );
+
+            CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id
+              ON document_chunks(document_id);
             """
         )
         _run_schema_migrations(connection)
@@ -326,6 +338,7 @@ def seed_database(reset: bool = False) -> None:
     with _transaction() as connection:
         if reset:
             connection.execute("DELETE FROM user_sessions")
+            connection.execute("DELETE FROM document_chunks")
             connection.execute("DELETE FROM ingestion_jobs")
             connection.execute("DELETE FROM documents")
             connection.execute("DELETE FROM articles")
@@ -462,6 +475,24 @@ def _to_ingestion_job(row: sqlite3.Row | None) -> IngestionJob | None:
     }
 
 
+def _to_document_chunk(row: sqlite3.Row | None) -> DocumentChunk | None:
+    if not row:
+        return None
+
+    chunk: DocumentChunk = {
+        "id": row["id"],
+        "documentId": row["document_id"],
+        "position": row["position"],
+        "text": row["text"],
+        "metadata": _parse_json_object(row["metadata_json"]),
+    }
+
+    if "document_filename" in row.keys():
+        chunk["documentFilename"] = row["document_filename"]
+
+    return chunk
+
+
 def list_documents() -> list[Document]:
     with _connection() as connection:
         rows = connection.execute(
@@ -473,6 +504,20 @@ def list_documents() -> list[Document]:
         ).fetchall()
 
         return [document for row in rows if (document := _to_document(row)) is not None]
+
+
+def get_document_by_id(document_id: str) -> Document | None:
+    with _connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, filename, content_type, size_bytes, storage_path, uploaded_by, uploaded_at, status, metadata_json
+            FROM documents
+            WHERE id = ?
+            """,
+            (document_id,),
+        ).fetchone()
+
+        return _to_document(row)
 
 
 def create_document(document: Document) -> Document:
@@ -537,6 +582,16 @@ def update_document_status(document_id: str, status: str) -> Document | None:
         ).fetchone()
 
         return _to_document(row)
+
+
+def update_document_metadata(document_id: str, metadata: dict[str, object]) -> Document | None:
+    with _transaction() as connection:
+        connection.execute(
+            "UPDATE documents SET metadata_json = ? WHERE id = ?",
+            (json.dumps(metadata, ensure_ascii=False), document_id),
+        )
+
+    return get_document_by_id(document_id)
 
 
 def list_ingestion_jobs(document_id: str | None = None) -> list[IngestionJob]:
@@ -618,6 +673,49 @@ def update_ingestion_job_status(
         ).fetchone()
 
         return _to_ingestion_job(row)
+
+
+def replace_document_chunks(document_id: str, chunks: list[DocumentChunk]) -> list[DocumentChunk]:
+    with _transaction() as connection:
+        connection.execute("DELETE FROM document_chunks WHERE document_id = ?", (document_id,))
+
+        for chunk in chunks:
+            connection.execute(
+                """
+                INSERT INTO document_chunks (id, document_id, position, text, metadata_json)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    chunk["id"],
+                    document_id,
+                    chunk["position"],
+                    chunk["text"],
+                    json.dumps(chunk.get("metadata", {}), ensure_ascii=False),
+                ),
+            )
+
+    return [chunk for chunk in list_document_chunks() if chunk["documentId"] == document_id]
+
+
+def list_document_chunks() -> list[DocumentChunk]:
+    with _connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+              document_chunks.id,
+              document_chunks.document_id,
+              document_chunks.position,
+              document_chunks.text,
+              document_chunks.metadata_json,
+              documents.filename AS document_filename
+            FROM document_chunks
+            JOIN documents ON documents.id = document_chunks.document_id
+            WHERE documents.status = 'indexed'
+            ORDER BY documents.uploaded_at DESC, document_chunks.position ASC
+            """
+        ).fetchall()
+
+        return [chunk for row in rows if (chunk := _to_document_chunk(row)) is not None]
 
 
 def _to_user(row: sqlite3.Row | None) -> User | None:

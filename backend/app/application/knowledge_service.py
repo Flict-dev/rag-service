@@ -2,7 +2,7 @@ from datetime import date
 import re
 from typing import Any
 
-from backend.app.domain.models import Article, DEFAULT_ACCESS, User, VALID_ROLES, VALID_STATUSES
+from backend.app.domain.models import Article, DEFAULT_ACCESS, DocumentChunk, User, VALID_ROLES, VALID_STATUSES
 
 
 def today_iso_date() -> str:
@@ -256,14 +256,45 @@ def search_readable_articles(articles: list[Article], query: Any) -> list[dict[s
     return results
 
 
-def build_answer_from_results(question: str, results: list[dict[str, object]]) -> dict[str, object]:
-    if not results:
+def search_document_chunks(chunks: list[DocumentChunk], query: Any) -> list[dict[str, object]]:
+    normalized_query = normalize_query(query)
+    if not normalized_query:
+        return []
+
+    results: list[dict[str, object]] = []
+    for chunk in chunks:
+        text = str(chunk["text"])
+        filename = str(chunk.get("documentFilename", "Документ"))
+
+        if normalized_query in normalize_query(text) or normalized_query in normalize_query(filename):
+            results.append(
+                {
+                    "chunk": chunk,
+                    "match": {
+                        "field": "documentChunk",
+                        "sectionHeading": f"Документ, фрагмент {int(chunk['position']) + 1}",
+                        "value": text,
+                    },
+                }
+            )
+
+    return results
+
+
+def build_answer_from_results(
+    question: str,
+    results: list[dict[str, object]],
+    document_results: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    document_matches = document_results or []
+
+    if not results and not document_matches:
         return {
             "answer": "По доступным статьям не нашлось уверенного ответа. Попробуйте уточнить вопрос или проверьте права доступа.",
             "sources": [],
         }
 
-    sources = [
+    article_sources = [
         {
             "articleId": result["article"]["id"],
             "sectionHeading": result["match"]["sectionHeading"],
@@ -271,6 +302,15 @@ def build_answer_from_results(question: str, results: list[dict[str, object]]) -
         }
         for result in results[:3]
     ]
+    document_sources = [
+        {
+            "documentId": result["chunk"]["documentId"],
+            "sectionHeading": result["match"]["sectionHeading"],
+            "title": result["chunk"].get("documentFilename", "Документ"),
+        }
+        for result in document_matches[: max(0, 3 - len(article_sources))]
+    ]
+    sources = [*article_sources, *document_sources]
     source_titles = ", ".join(str(source["title"]) for source in sources)
 
     return {

@@ -1,4 +1,4 @@
-from backend.app.domain.models import Article, Document, IngestionJob, User, UserCredentials
+from backend.app.domain.models import Article, Document, DocumentChunk, IngestionJob, User, UserCredentials
 from backend.app.infrastructure.db import database
 
 
@@ -36,11 +36,17 @@ class SQLiteKnowledgeRepository:
     def list_documents(self) -> list[Document]:
         return database.list_documents()
 
+    def get_document_by_id(self, document_id: str) -> Document | None:
+        return database.get_document_by_id(document_id)
+
     def create_document(self, document: Document) -> Document:
         return database.create_document(document)
 
     def update_document_status(self, document_id: str, status: str) -> Document | None:
         return database.update_document_status(document_id, status)
+
+    def update_document_metadata(self, document_id: str, metadata: dict[str, object]) -> Document | None:
+        return database.update_document_metadata(document_id, metadata)
 
     def list_ingestion_jobs(self, document_id: str | None = None) -> list[IngestionJob]:
         return database.list_ingestion_jobs(document_id)
@@ -64,3 +70,9 @@ class SQLiteKnowledgeRepository:
             started_at=started_at,
             finished_at=finished_at,
         )
+
+    def replace_document_chunks(self, document_id: str, chunks: list[DocumentChunk]) -> list[DocumentChunk]:
+        return database.replace_document_chunks(document_id, chunks)
+
+    def list_document_chunks(self) -> list[DocumentChunk]:
+        return database.list_document_chunks()
