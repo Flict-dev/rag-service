@@ -12,7 +12,7 @@ import { clearCurrentUser, loadCurrentUser, saveCurrentUser } from './lib/storag
 import AuthScreen from './screens/AuthScreen'
 import DocsScreen from './screens/DocsScreen'
 import LandingPage from './screens/LandingPage'
-import type { AuthMode, CurrentUser, UserRole } from './types'
+import type { AuthMode, CurrentUser, KnowledgeArticle, UserRole } from './types'
 
 type NavigationState = {
   from?: {
@@ -103,6 +103,26 @@ function App() {
     return seedArticles
   }
 
+  const saveArticle = (article: KnowledgeArticle) => {
+    setArticles((currentArticles) => {
+      const articleExists = currentArticles.some((currentArticle) => currentArticle.id === article.id)
+
+      if (!articleExists) {
+        return [article, ...currentArticles]
+      }
+
+      return currentArticles.map((currentArticle) =>
+        currentArticle.id === article.id ? article : currentArticle,
+      )
+    })
+  }
+
+  const deleteArticle = (articleId: string) => {
+    setArticles((currentArticles) =>
+      currentArticles.filter((currentArticle) => currentArticle.id !== articleId),
+    )
+  }
+
   return (
     <div className="app-shell">
       <Topbar
@@ -155,7 +175,9 @@ function App() {
               <DocsScreen
                 articles={articles}
                 currentUser={currentUser}
+                onDeleteArticle={deleteArticle}
                 onResetArticles={resetArticles}
+                onSaveArticle={saveArticle}
               />
             ) : (
               <Navigate to="/login" replace state={{ from: location }} />
@@ -169,7 +191,9 @@ function App() {
               <DocsScreen
                 articles={articles}
                 currentUser={currentUser}
+                onDeleteArticle={deleteArticle}
                 onResetArticles={resetArticles}
+                onSaveArticle={saveArticle}
               />
             ) : (
               <Navigate to="/login" replace state={{ from: location }} />
