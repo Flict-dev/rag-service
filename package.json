@@ -1,0 +1,11 @@
+{
+  "name": "rag-service",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix frontend run build && node --check backend/src/server.js && node --check backend/src/db.js && node --check backend/src/seed.js && node --check backend/src/seedData.js",
+    "dev": "node scripts/dev.mjs",
+    "seed": "npm --prefix backend run seed"
+  }
+}
