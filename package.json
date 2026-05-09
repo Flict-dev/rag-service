@@ -8,6 +8,7 @@
     "build": "npm --prefix frontend run build && node scripts/run-python.mjs -m compileall -q backend",
     "db:upgrade": "node scripts/run-python.mjs -m alembic -c backend/alembic.ini upgrade head",
     "dev": "node scripts/dev.mjs",
-    "seed": "node scripts/run-python.mjs -m backend.app.seed"
+    "seed": "node scripts/run-python.mjs -m backend.app.seed",
+    "test:backend": "node scripts/run-python.mjs -m pytest backend/tests"
   }
 }

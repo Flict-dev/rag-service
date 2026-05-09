@@ -31,6 +31,7 @@ npm run build
 npm run seed
 npm run backend:dev
 npm run db:upgrade
+npm run test:backend
 ```
 
 - `dev` запускает frontend и backend вместе.
@@ -38,6 +39,7 @@ npm run db:upgrade
 - `build` собирает frontend и проверяет Python backend через `compileall`.
 - `seed` пересоздаёт демо-роли, пользователей и статьи в SQLite.
 - `db:upgrade` применяет Alembic-миграции к `DATABASE_URL`.
+- `test:backend` запускает backend API smoke-тесты.
 
 ## Демо-вход
 
