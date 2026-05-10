@@ -1,321 +1,148 @@
-import { useState } from 'react'
-import { Check, Save, Send, Trash2, Undo2, X } from 'lucide-react'
-import { articleStatusLabels, roleLabels } from '../data/demoData'
-import type { ArticleStatus, CurrentUser, KnowledgeArticle, UserRole } from '../types'
+import { type FormEvent, useState } from 'react'
+import { FileText, Save, Trash2, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  articleToMarkdown,
+  createFolderTag,
+  getFallbackFolder,
+  markdownSummary,
+  markdownToArticleSections,
+} from '../lib/markdownArticle'
+import type { CurrentUser, KnowledgeArticle } from '../types'
 
 type ArticleEditorMode = 'create' | 'edit'
-type SubmitIntent = ArticleStatus
-
-type SectionFormValue = {
-  id: string
-  heading: string
-  paragraphs: string
-  bullets: string
-}
 
 type ArticleFormValue = {
+  folder: string
+  markdown: string
   title: string
-  description: string
-  group: string
-  owner: string
-  tags: string
-  access: UserRole[]
-  sections: SectionFormValue[]
-}
-
-type PendingSubmit = {
-  article: KnowledgeArticle
-  status: SubmitIntent
 }
 
 type ArticleEditorFormProps = {
   article: KnowledgeArticle | null
-  canManageAccess: boolean
   currentUser: CurrentUser
   existingGroups: string[]
+  initialGroup?: string
   mode: ArticleEditorMode
   onCancel: () => void
   onDelete?: (articleId: string) => void
-  onSubmit: (article: KnowledgeArticle, status: SubmitIntent) => void
+  onSubmit: (article: KnowledgeArticle) => Promise<void> | void
 }
 
-const editableRoles: UserRole[] = ['reader', 'editor', 'admin']
+function createInitialForm(
+  article: KnowledgeArticle | null,
+  initialGroup?: string,
+): ArticleFormValue {
+  if (!article) {
+    return {
+      folder: initialGroup || getFallbackFolder(),
+      markdown: '# Новая страница\n\nНачните писать здесь.',
+      title: '',
+    }
+  }
 
-function createSectionId(index: number) {
-  return `section-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`
-}
-
-function createEmptySection(index = 0): SectionFormValue {
   return {
-    id: createSectionId(index),
-    heading: '',
-    paragraphs: '',
-    bullets: '',
+    folder: article.group,
+    markdown: articleToMarkdown(article),
+    title: article.title,
   }
 }
 
-function formatTextList(value: string[]) {
-  return value.join('\n')
-}
+function getValidationErrors(formValue: ArticleFormValue) {
+  const errors: string[] = []
 
-function parseCommaList(value: string) {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
+  if (!formValue.title.trim()) {
+    errors.push('Добавьте название страницы.')
+  }
 
-function parseLineList(value: string) {
-  return value
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean)
+  if (!formValue.folder.trim()) {
+    errors.push('Выберите или создайте папку.')
+  }
+
+  if (!formValue.markdown.trim()) {
+    errors.push('Markdown-файл не должен быть пустым.')
+  }
+
+  return errors
 }
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
 }
 
-function createInitialForm(
-  article: KnowledgeArticle | null,
-  currentUser: CurrentUser,
-): ArticleFormValue {
-  if (!article) {
-    return {
-      title: '',
-      description: '',
-      group: '',
-      owner: currentUser.name,
-      tags: '',
-      access: ['reader', 'editor', 'admin'],
-      sections: [createEmptySection()],
-    }
-  }
-
-  return {
-    title: article.title,
-    description: article.description,
-    group: article.group,
-    owner: article.owner,
-    tags: article.tags.join(', '),
-    access: [...article.access],
-    sections: article.sections.map((section, index) => ({
-      id: createSectionId(index),
-      heading: section.heading,
-      paragraphs: formatTextList(section.paragraphs),
-      bullets: formatTextList(section.bullets ?? []),
-    })),
-  }
-}
-
-function getValidationErrors(formValue: ArticleFormValue) {
-  const errors: string[] = []
-  const normalizedSections = formValue.sections.map((section) => ({
-    heading: section.heading.trim(),
-    paragraphs: parseLineList(section.paragraphs),
-    bullets: parseLineList(section.bullets),
-  }))
-
-  if (!formValue.title.trim()) {
-    errors.push('Добавьте название статьи.')
-  }
-
-  if (!formValue.description.trim()) {
-    errors.push('Добавьте краткое описание.')
-  }
-
-  if (!formValue.group.trim()) {
-    errors.push('Укажите раздел базы знаний.')
-  }
-
-  if (!formValue.owner.trim()) {
-    errors.push('Укажите владельца статьи.')
-  }
-
-  if (parseCommaList(formValue.tags).length === 0) {
-    errors.push('Добавьте хотя бы один тег через запятую.')
-  }
-
-  if (formValue.access.length === 0) {
-    errors.push('Выберите хотя бы одну роль доступа.')
-  }
-
-  if (normalizedSections.length === 0) {
-    errors.push('Добавьте хотя бы один раздел статьи.')
-  }
-
-  normalizedSections.forEach((section, index) => {
-    const sectionNumber = index + 1
-
-    if (!section.heading) {
-      errors.push(`Раздел ${sectionNumber}: добавьте заголовок.`)
-    }
-
-    if (section.paragraphs.length === 0) {
-      errors.push(`Раздел ${sectionNumber}: добавьте хотя бы один абзац.`)
-    }
-  })
-
-  return errors
-}
-
 function ArticleEditorForm({
   article,
-  canManageAccess,
   currentUser,
   existingGroups,
+  initialGroup,
   mode,
   onCancel,
   onDelete,
   onSubmit,
 }: ArticleEditorFormProps) {
-  const [formValue, setFormValue] = useState(() => createInitialForm(article, currentUser))
+  const [formValue, setFormValue] = useState(() =>
+    createInitialForm(article, initialGroup),
+  )
   const [validationErrors, setValidationErrors] = useState<string[]>([])
-  const [pendingSubmit, setPendingSubmit] = useState<PendingSubmit | null>(null)
   const isCreateMode = mode === 'create'
-  const saveStatus: SubmitIntent = isCreateMode ? 'draft' : (article?.status ?? 'draft')
-  const showPublishButton = isCreateMode || article?.status !== 'published'
 
-  const updateField = (field: keyof Omit<ArticleFormValue, 'sections' | 'access'>, value: string) => {
+  const updateField = (field: keyof ArticleFormValue, value: string) => {
     setFormValue((currentValue) => ({
       ...currentValue,
       [field]: value,
     }))
   }
 
-  const updateSection = (
-    sectionId: string,
-    field: keyof Omit<SectionFormValue, 'id'>,
-    value: string,
-  ) => {
-    setFormValue((currentValue) => ({
-      ...currentValue,
-      sections: currentValue.sections.map((section) =>
-        section.id === sectionId ? { ...section, [field]: value } : section,
-      ),
-    }))
-  }
+  const submitMarkdownFile = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
 
-  const toggleAccessRole = (role: UserRole, checked: boolean) => {
-    if (!canManageAccess) {
-      return
-    }
-
-    setFormValue((currentValue) => {
-      const nextAccess = checked
-        ? [...currentValue.access, role]
-        : currentValue.access.filter((accessRole) => accessRole !== role)
-
-      return {
-        ...currentValue,
-        access: editableRoles.filter((accessRole) => nextAccess.includes(accessRole)),
-      }
-    })
-  }
-
-  const addSection = () => {
-    setFormValue((currentValue) => ({
-      ...currentValue,
-      sections: [...currentValue.sections, createEmptySection(currentValue.sections.length)],
-    }))
-  }
-
-  const removeSection = (sectionId: string) => {
-    setFormValue((currentValue) => ({
-      ...currentValue,
-      sections:
-        currentValue.sections.length > 1
-          ? currentValue.sections.filter((section) => section.id !== sectionId)
-          : currentValue.sections,
-    }))
-  }
-
-  const buildArticle = (status: SubmitIntent) => {
     const nextValidationErrors = getValidationErrors(formValue)
 
     if (nextValidationErrors.length > 0) {
       setValidationErrors(nextValidationErrors)
-      setPendingSubmit(null)
-      return null
+      return
     }
 
-    const normalizedSections = formValue.sections.map((section) => {
-      const bullets = parseLineList(section.bullets)
-
-      return {
-        heading: section.heading.trim(),
-        paragraphs: parseLineList(section.paragraphs),
-        bullets: bullets.length > 0 ? bullets : undefined,
-      }
-    })
-
+    const title = formValue.title.trim()
+    const folder = formValue.folder.trim()
+    const markdown = formValue.markdown.trim()
     const now = todayIsoDate()
     const nextArticle: KnowledgeArticle = {
       id: article?.id ?? '',
-      group: formValue.group.trim(),
-      title: formValue.title.trim(),
-      description: formValue.description.trim(),
-      owner: formValue.owner.trim(),
-      ownerId: article?.ownerId ?? currentUser.id,
+      access: article?.access ?? ['reader', 'editor', 'admin'],
       createdAt: article?.createdAt ?? now,
+      description: markdownSummary(markdown, title),
+      group: folder,
+      owner: article?.owner ?? currentUser.name,
+      ownerId: article?.ownerId ?? currentUser.id,
+      sections: markdownToArticleSections(title, markdown),
+      status: article?.status ?? 'published',
+      tags: article?.tags.length ? article.tags : [createFolderTag(folder)],
+      title,
       updatedAt: now,
-      status,
-      access: canManageAccess ? formValue.access : (article?.access ?? formValue.access),
-      tags: parseCommaList(formValue.tags),
-      sections: normalizedSections,
-    }
-
-    return nextArticle
-  }
-
-  const requestArticleSubmit = (status: SubmitIntent) => {
-    const nextArticle = buildArticle(status)
-
-    if (!nextArticle) {
-      return
     }
 
     setValidationErrors([])
-    setPendingSubmit({
-      article: nextArticle,
-      status,
-    })
-  }
-
-  const applyPendingSubmit = () => {
-    if (!pendingSubmit) {
-      return
-    }
-
-    onSubmit(pendingSubmit.article, pendingSubmit.status)
-    setPendingSubmit(null)
-  }
-
-  const keepCurrentArticle = () => {
-    setPendingSubmit(null)
-    onCancel()
+    void onSubmit(nextArticle)
   }
 
   return (
-    <form className="article-editor" onSubmit={(event) => event.preventDefault()}>
-      <div className="editor-title-row">
-        <div>
-          <span className="eyebrow">{isCreateMode ? 'Новая статья' : 'Редактирование'}</span>
-          <h1>{isCreateMode ? 'Создать материал' : article?.title}</h1>
-          <p>
-            {isCreateMode
-              ? 'Заполните структуру, сохраните черновик или сразу опубликуйте статью.'
-              : `Текущий статус: ${article ? articleStatusLabels[article.status] : 'черновик'}.`}
-          </p>
+    <form className="article-editor markdown-editor" onSubmit={submitMarkdownFile}>
+      <header className="markdown-editor-header">
+        <div className="markdown-file-label">
+          <FileText aria-hidden="true" />
+          <span>{formValue.title.trim() || 'untitled'}.md</span>
         </div>
-        <button className="icon-button" onClick={onCancel} type="button" aria-label="Закрыть форму">
-          <X aria-hidden="true" size={18} />
-        </button>
-      </div>
+        <Button onClick={onCancel} type="button" variant="ghost" size="icon-sm" aria-label="Закрыть редактор">
+          <X aria-hidden="true" />
+        </Button>
+      </header>
 
       {validationErrors.length > 0 && (
         <div className="validation-summary" role="alert">
-          <strong>Проверьте форму</strong>
+          <strong>Проверьте страницу</strong>
           <ul>
             {validationErrors.map((error) => (
               <li key={error}>{error}</li>
@@ -324,31 +151,11 @@ function ArticleEditorForm({
         </div>
       )}
 
-      {pendingSubmit && (
-        <div className="editor-confirmation" role="group" aria-label="Подтверждение сохранения">
-          <div>
-            <strong>Применить изменения?</strong>
-            <p>
-              Можно сохранить текущую версию или оставить статью без изменений.
-            </p>
-          </div>
-          <div className="editor-confirmation-actions">
-            <button className="primary-button" onClick={applyPendingSubmit} type="button">
-              <Check aria-hidden="true" size={16} />
-              <span>Применить изменения</span>
-            </button>
-            <button className="secondary-button" onClick={keepCurrentArticle} type="button">
-              <Undo2 aria-hidden="true" size={16} />
-              <span>Оставить как есть</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="editor-grid">
+      <div className="markdown-title-grid">
         <label className="editor-field">
-          <span>Название</span>
-          <input
+          <span>Название страницы</span>
+          <Input
+            autoFocus
             onChange={(event) => updateField('title', event.target.value)}
             placeholder="Например: Регламент публикации"
             type="text"
@@ -357,13 +164,13 @@ function ArticleEditorForm({
         </label>
 
         <label className="editor-field">
-          <span>Раздел</span>
-          <input
+          <span>Папка</span>
+          <Input
             list="article-groups"
-            onChange={(event) => updateField('group', event.target.value)}
-            placeholder="Материалы"
+            onChange={(event) => updateField('folder', event.target.value)}
+            placeholder={getFallbackFolder()}
             type="text"
-            value={formValue.group}
+            value={formValue.folder}
           />
           <datalist id="article-groups">
             {existingGroups.map((group) => (
@@ -371,132 +178,33 @@ function ArticleEditorForm({
             ))}
           </datalist>
         </label>
-
-        <label className="editor-field editor-field-wide">
-          <span>Описание</span>
-          <textarea
-            onChange={(event) => updateField('description', event.target.value)}
-            placeholder="Коротко объясните, когда и кому нужна эта статья."
-            rows={3}
-            value={formValue.description}
-          />
-        </label>
-
-        <label className="editor-field">
-          <span>Владелец</span>
-          <input
-            onChange={(event) => updateField('owner', event.target.value)}
-            placeholder="Имя владельца процесса"
-            type="text"
-            value={formValue.owner}
-          />
-        </label>
-
-        <label className="editor-field">
-          <span>Теги</span>
-          <input
-            onChange={(event) => updateField('tags', event.target.value)}
-            placeholder="publish, workflow, docs"
-            type="text"
-            value={formValue.tags}
-          />
-        </label>
       </div>
 
-      <fieldset className="editor-fieldset">
-        <legend>Роли доступа</legend>
-        <div className="access-role-grid">
-          {editableRoles.map((role) => (
-            <label className="access-role-option" key={role}>
-              <input
-                checked={formValue.access.includes(role)}
-                disabled={!canManageAccess}
-                onChange={(event) => toggleAccessRole(role, event.target.checked)}
-                type="checkbox"
-              />
-              <span>{roleLabels[role]}</span>
-            </label>
-          ))}
-        </div>
-        {!canManageAccess && <small>Менять доступы может только администратор.</small>}
-      </fieldset>
+      <label className="editor-field markdown-body-field">
+        <span>Markdown</span>
+        <Textarea
+          onChange={(event) => updateField('markdown', event.target.value)}
+          spellCheck="false"
+          value={formValue.markdown}
+        />
+      </label>
 
-      <div className="sections-editor">
-        <div className="sections-editor-heading">
-          <div>
-            <span className="eyebrow">Содержимое</span>
-            <h2>Разделы статьи</h2>
-          </div>
-          <button className="secondary-button compact" onClick={addSection} type="button">
-            Добавить раздел
-          </button>
-        </div>
-
-        {formValue.sections.map((section, index) => (
-          <section className="section-editor-card" key={section.id}>
-            <div className="section-editor-top">
-              <strong>Раздел {index + 1}</strong>
-              <button
-                disabled={formValue.sections.length === 1}
-                onClick={() => removeSection(section.id)}
-                type="button"
-              >
-                Удалить
-              </button>
-            </div>
-
-            <label className="editor-field">
-              <span>Заголовок</span>
-              <input
-                onChange={(event) => updateSection(section.id, 'heading', event.target.value)}
-                placeholder="Например: Проверка перед публикацией"
-                type="text"
-                value={section.heading}
-              />
-            </label>
-
-            <label className="editor-field">
-              <span>Абзацы</span>
-              <textarea
-                onChange={(event) => updateSection(section.id, 'paragraphs', event.target.value)}
-                placeholder="Каждый абзац с новой строки"
-                rows={5}
-                value={section.paragraphs}
-              />
-            </label>
-
-            <label className="editor-field">
-              <span>Список</span>
-              <textarea
-                onChange={(event) => updateSection(section.id, 'bullets', event.target.value)}
-                placeholder="Необязательные пункты, каждый с новой строки"
-                rows={3}
-                value={section.bullets}
-              />
-            </label>
-          </section>
-        ))}
-      </div>
-
-      <div className="editor-actions">
+      <footer className="markdown-editor-actions">
         {!isCreateMode && article && onDelete && (
-          <button className="danger-button" onClick={() => onDelete(article.id)} type="button">
-            <Trash2 aria-hidden="true" size={16} />
+          <Button variant="destructive" onClick={() => onDelete(article.id)} type="button">
+            <Trash2 aria-hidden="true" data-icon="inline-start" />
             <span>Удалить</span>
-          </button>
+          </Button>
         )}
-        <span />
-        <button className="secondary-button" onClick={() => requestArticleSubmit(saveStatus)} type="button">
-          <Save aria-hidden="true" size={16} />
-          <span>{isCreateMode ? 'Сохранить черновик' : 'Сохранить'}</span>
-        </button>
-        {showPublishButton && (
-          <button className="primary-button" onClick={() => requestArticleSubmit('published')} type="button">
-            <Send aria-hidden="true" size={16} />
-            <span>Опубликовать</span>
-          </button>
-        )}
-      </div>
+        <Button variant="outline" onClick={onCancel} type="button">
+          <X aria-hidden="true" data-icon="inline-start" />
+          <span>Отмена</span>
+        </Button>
+        <Button type="submit">
+          <Save aria-hidden="true" data-icon="inline-start" />
+          <span>Сохранить .md</span>
+        </Button>
+      </footer>
     </form>
   )
 }

@@ -4,6 +4,7 @@ import './App.css'
 import { createApiArticle, deleteApiArticle, fetchApiArticles, updateApiArticle } from './api/articles'
 import { loginApi, logoutApi } from './api/auth'
 import Topbar from './components/Topbar'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { demoUsers } from './data/demoData'
 import {
   loadArticles,
@@ -258,7 +259,8 @@ function App() {
         onSignOut={signOut}
       />
 
-      <Routes>
+      <TooltipProvider>
+        <Routes>
         <Route
           path="/"
           element={
@@ -336,7 +338,8 @@ function App() {
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        </Routes>
+      </TooltipProvider>
     </div>
   )
 }

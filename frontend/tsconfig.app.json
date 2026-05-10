@@ -10,8 +10,13 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "noEmit": true,
     "jsx": "react-jsx",
 
