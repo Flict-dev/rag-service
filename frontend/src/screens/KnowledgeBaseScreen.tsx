@@ -1,8 +1,8 @@
 import {
   type CSSProperties,
+  type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -21,6 +21,7 @@ import {
   Save,
   Send,
   Undo2,
+  Upload,
 } from 'lucide-react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -77,14 +78,22 @@ import {
   getBaseSection,
   getSectionPages,
   pageSummary,
-  searchKnowledgeBase,
 } from '../lib/knowledge'
-import { createPage, createSection, touchBase } from '../lib/storage'
-import type { ChatMessage, CreateTarget, KnowledgeBase } from '../types'
+import type { AskResponse } from '../api/ask'
+import type { ChatMessage, CreateTarget, KnowledgeBase, KnowledgePage, KnowledgeSection } from '../types'
 
 type KnowledgeBaseScreenProps = {
   bases: KnowledgeBase[]
+  onAsk: (baseId: string, question: string) => Promise<AskResponse>
+  onCreatePage: (baseId: string, sectionId: string | undefined, title: string) => Promise<KnowledgePage>
+  onCreateSection: (baseId: string, title: string) => Promise<KnowledgeSection>
+  onSavePage: (
+    baseId: string,
+    pageId: string,
+    payload: Partial<Pick<KnowledgePage, 'contentMd' | 'sectionId' | 'title'>>,
+  ) => Promise<KnowledgePage>
   onUpdateBase: (base: KnowledgeBase) => void
+  onUploadDocument: (baseId: string, file: File) => Promise<unknown>
 }
 
 type EditDraft = {
@@ -102,14 +111,11 @@ type BaseSidebarProps = {
 }
 
 type ChatPanelProps = {
-  base: KnowledgeBase
   isAnswering: boolean
   messages: ChatMessage[]
   onAsk: (question: string) => void
   onOpenPage: (pageId: string) => void
 }
-
-const CHAT_RESPONSE_DELAY_MS = 650
 
 function ActionMenu({
   onCreatePage,
@@ -309,7 +315,7 @@ function BaseSidebar({
   )
 }
 
-function ChatPanel({ base, isAnswering, messages, onAsk, onOpenPage }: ChatPanelProps) {
+function ChatPanel({ isAnswering, messages, onAsk, onOpenPage }: ChatPanelProps) {
   const [query, setQuery] = useState('')
 
   const askCurrentQuestion = () => {
@@ -353,18 +359,22 @@ function ChatPanel({ base, isAnswering, messages, onAsk, onOpenPage }: ChatPanel
               {messages.map((message) => (
                 <div className={`chat-message ${message.role}`} key={message.id}>
                   <p>{message.text}</p>
-                  {message.sourcePageIds?.length ? (
+                  {message.sources?.length ? (
                     <div className="chat-sources">
-                      {message.sourcePageIds.map((pageId) => {
-                        const page = getBasePage(base, pageId)
-
-                        if (!page) {
-                          return null
-                        }
-
+                      {message.sources.map((source) => {
                         return (
-                          <button key={page.id} onClick={() => onOpenPage(page.id)} type="button">
-                            {page.title}.md
+                          <button
+                            disabled={source.sourceType !== 'page'}
+                            key={`${source.sourceType}-${source.sourceId}`}
+                            onClick={() => {
+                              if (source.sourceType === 'page') {
+                                onOpenPage(source.sourceId)
+                              }
+                            }}
+                            title={source.excerpt}
+                            type="button"
+                          >
+                            {source.title}
                           </button>
                         )
                       })}
@@ -483,7 +493,15 @@ function BaseOverview({ base }: { base: KnowledgeBase }) {
   )
 }
 
-function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) {
+function KnowledgeBaseScreen({
+  bases,
+  onAsk,
+  onCreatePage,
+  onCreateSection,
+  onSavePage,
+  onUpdateBase,
+  onUploadDocument,
+}: KnowledgeBaseScreenProps) {
   const { baseId, pageId, sectionId } = useParams<{
     baseId: string
     pageId?: string
@@ -496,7 +514,10 @@ function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) 
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isAnswering, setIsAnswering] = useState(false)
-  const answerTimeoutRef = useRef<number | null>(null)
+  const [isSavingPage, setIsSavingPage] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null)
+  const uploadInputRef = useRef<HTMLInputElement | null>(null)
 
   const selectedPage = base ? getBasePage(base, pageId) : null
   const selectedSection = base
@@ -530,32 +551,25 @@ function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) 
     }
   }, [createTarget?.type])
 
-  useEffect(() => {
-    return () => {
-      if (answerTimeoutRef.current !== null) {
-        window.clearTimeout(answerTimeoutRef.current)
-      }
-    }
-  }, [])
-
   if (!base) {
     return <Navigate to="/bases" replace />
   }
 
   const updateBase = (nextBase: KnowledgeBase) => {
-    onUpdateBase(touchBase(nextBase))
+    onUpdateBase(nextBase)
   }
 
-  const createItem = (name: string) => {
+  const createItem = async (name: string) => {
     if (!createTarget) {
       return
     }
 
     if (createTarget.type === 'section') {
-      const section = createSection(name, base)
+      const section = await onCreateSection(base.id, name)
       updateBase({
         ...base,
         sections: [...base.sections, section],
+        updatedAt: section.updatedAt,
       })
       navigate(`/bases/${base.id}/section/${section.id}`)
       return
@@ -567,10 +581,11 @@ function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) 
       return
     }
 
-    const page = createPage(name, sectionIdForPage, base)
+    const page = await onCreatePage(base.id, sectionIdForPage, name)
     updateBase({
       ...base,
-      pages: [...base.pages, page],
+      pages: [page, ...base.pages],
+      updatedAt: page.updatedAt,
     })
     setEditDraft({
       baselineContentMd: page.contentMd,
@@ -596,31 +611,30 @@ function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) 
     setEditDraft(null)
   }
 
-  const savePageChanges = () => {
+  const savePageChanges = async () => {
     if (!selectedPage || editDraft?.pageId !== selectedPage.id) {
       return
     }
 
     if (hasEditChanges) {
-      updateBase({
-        ...base,
-        pages: base.pages.map((candidate) =>
-          candidate.id === selectedPage.id
-            ? {
-                ...candidate,
-                contentMd: editDraft.contentMd,
-                updatedAt: new Date().toISOString(),
-              }
-            : candidate,
-        ),
-      })
+      setIsSavingPage(true)
+      try {
+        const page = await onSavePage(base.id, selectedPage.id, { contentMd: editDraft.contentMd })
+        updateBase({
+          ...base,
+          pages: base.pages.map((candidate) => (candidate.id === selectedPage.id ? page : candidate)),
+          updatedAt: page.updatedAt,
+        })
+      } finally {
+        setIsSavingPage(false)
+      }
     }
 
     setEditDraft(null)
   }
 
-  const askQuestion = (question: string) => {
-    if (isAnswering || answerTimeoutRef.current !== null) {
+  const askQuestion = async (question: string) => {
+    if (isAnswering) {
       return
     }
 
@@ -636,30 +650,58 @@ function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) 
     ])
     setIsAnswering(true)
 
-    answerTimeoutRef.current = window.setTimeout(() => {
-      const results = searchKnowledgeBase(base, question)
-      const answer =
-        results.length > 0
-          ? `Нашел ${results.length} источника по запросу "${question}". Самый близкий фрагмент: ${results[0].excerpt}`
-          : `По запросу "${question}" в markdown-файлах ничего не найдено.`
-
+    try {
+      const response = await onAsk(base.id, question)
       setMessages((currentMessages) => [
         ...currentMessages,
         {
           id: `assistant-${requestId}`,
           role: 'assistant',
-          sourcePageIds: results.map((result) => result.page.id),
-          text: answer,
+          sources: response.sources,
+          text: response.warning ? `${response.answer}\n\n${response.warning}` : response.answer,
         },
       ])
+    } catch {
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        {
+          id: `assistant-${requestId}`,
+          role: 'assistant',
+          text: 'Не удалось получить ответ от backend. Проверьте, что API запущен.',
+        },
+      ])
+    } finally {
       setIsAnswering(false)
-      answerTimeoutRef.current = null
-    }, CHAT_RESPONSE_DELAY_MS)
+    }
   }
 
   const openPageFromChat = (nextPageId: string) => {
     setEditDraft(null)
     navigate(`/bases/${base.id}/page/${nextPageId}`)
+  }
+
+  const pickDocument = () => {
+    uploadInputRef.current?.click()
+  }
+
+  const uploadDocument = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file || isUploading) {
+      return
+    }
+
+    setIsUploading(true)
+    setUploadStatus(null)
+    try {
+      await onUploadDocument(base.id, file)
+      setUploadStatus(`${file.name} загружен и поставлен в индексацию.`)
+    } catch {
+      setUploadStatus('Не удалось загрузить документ.')
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   return (
@@ -734,6 +776,7 @@ function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) 
                           </Button>
                         ) : null}
                         <Button
+                          disabled={isSavingPage}
                           onClick={isEditingSelectedPage ? savePageChanges : startPageEditing}
                           type="button"
                           variant={isEditingSelectedPage ? 'default' : 'outline'}
@@ -743,10 +786,21 @@ function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) 
                           ) : (
                             <Pencil aria-hidden="true" data-icon="inline-start" />
                           )}
-                          {isEditingSelectedPage ? 'Сохранить' : 'Редактировать'}
+                          {isSavingPage ? 'Сохраняем...' : isEditingSelectedPage ? 'Сохранить' : 'Редактировать'}
                         </Button>
                       </>
                     ) : null}
+                    <input
+                      accept=".md,.txt,.csv,.json,.log,text/*,application/json"
+                      className="sr-only"
+                      onChange={uploadDocument}
+                      ref={uploadInputRef}
+                      type="file"
+                    />
+                    <Button disabled={isUploading} onClick={pickDocument} type="button" variant="outline">
+                      <Upload aria-hidden="true" data-icon="inline-start" />
+                      {isUploading ? 'Загружаем...' : 'Загрузить'}
+                    </Button>
                     <Button
                       aria-pressed={chatOpen}
                       onClick={() => setChatOpen((open) => !open)}
@@ -762,6 +816,7 @@ function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) 
 
                 <ScrollArea className="kb-content-scroll">
                   <div className="kb-content kb-content-wide">
+                    {uploadStatus ? <p className="kb-upload-status">{uploadStatus}</p> : null}
                     {selectedPage ? (
                       isEditingSelectedPage ? (
                         <Field className="markdown-editor-field">
@@ -799,7 +854,6 @@ function KnowledgeBaseScreen({ bases, onUpdateBase }: KnowledgeBaseScreenProps) 
                 <ResizableHandle withHandle />
                 <ResizablePanel defaultSize={30} minSize={24}>
                   <ChatPanel
-                    base={base}
                     isAnswering={isAnswering}
                     messages={messages}
                     onAsk={askQuestion}

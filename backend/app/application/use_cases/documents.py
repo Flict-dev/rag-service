@@ -6,6 +6,7 @@ from uuid import uuid4
 from backend.app.application.errors import BadRequestError, PermissionDeniedError
 from backend.app.application.ports.repositories import DocumentRepository
 from backend.app.application.ports.storage import DocumentStorage
+from backend.app.application.rag_chunks import build_rag_chunks
 from backend.app.domain.models import Document, DocumentChunk, IngestionJob, User
 
 
@@ -103,15 +104,16 @@ def _chunk_text(document_id: str, text: str) -> list[DocumentChunk]:
 
 
 class DocumentUseCases:
-    def __init__(self, repository: DocumentRepository, storage: DocumentStorage) -> None:
+    def __init__(self, repository: DocumentRepository, storage: DocumentStorage, rag_service: Any | None = None) -> None:
         self.repository = repository
         self.storage = storage
+        self.rag_service = rag_service
 
-    def list_documents(self, user: User) -> list[Document]:
+    def list_documents(self, user: User, knowledge_base_id: str | None = None) -> list[Document]:
         if not _can_manage_documents(user):
             raise PermissionDeniedError("Only editor and admin can manage documents")
 
-        return self.repository.list_documents()
+        return self.repository.list_documents(knowledge_base_id)
 
     def upload(
         self,
@@ -120,6 +122,7 @@ class DocumentUseCases:
         filename: str,
         content_type: str | None,
         content: bytes,
+        knowledge_base_id: str | None = None,
     ) -> dict[str, object]:
         if not _can_manage_documents(user):
             raise PermissionDeniedError("Only editor and admin can upload documents")
@@ -139,6 +142,7 @@ class DocumentUseCases:
         storage_path = self.storage.save(document_id, filename, content)
         document: Document = {
             "id": document_id,
+            "knowledgeBaseId": knowledge_base_id,
             "filename": filename,
             "contentType": content_type or "application/octet-stream",
             "sizeBytes": len(content),
@@ -151,6 +155,7 @@ class DocumentUseCases:
         job: IngestionJob = {
             "id": job_id,
             "documentId": document_id,
+            "knowledgeBaseId": knowledge_base_id,
             "status": "queued",
             "createdAt": now,
             "startedAt": None,
@@ -183,6 +188,19 @@ class DocumentUseCases:
             text = _normalize_document_text(_decode_text(content)) if _is_text_document(document) else ""
             chunks = _chunk_text(document_id, text)
             self.repository.replace_document_chunks(document_id, chunks)
+
+            if document.get("knowledgeBaseId"):
+                rag_chunks = build_rag_chunks(
+                    knowledge_base_id=str(document["knowledgeBaseId"]),
+                    source_type="document",
+                    source_id=document_id,
+                    title=str(document["filename"]),
+                    section_heading="Документ",
+                    text=text,
+                )
+                if self.rag_service:
+                    rag_chunks = self.rag_service.index_chunks(rag_chunks)
+                self.repository.replace_rag_chunks("document", document_id, rag_chunks)
 
             finished_at = _utc_now()
             metadata: dict[str, object] = {

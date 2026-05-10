@@ -1,6 +1,3 @@
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,21 +14,11 @@ from backend.app.application.errors import (
     PermissionDeniedError,
     ValidationFailedError,
 )
-from backend.app.infrastructure.db.database import init_database, seed_database
 from backend.app.shared.config import get_settings
 
 
 settings = get_settings()
-
-
-@asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    init_database()
-    seed_database()
-    yield
-
-
-app = FastAPI(title="RAG Base API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="RAG Base API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

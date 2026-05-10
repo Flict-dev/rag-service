@@ -5,11 +5,11 @@ from fastapi import Depends, Header
 from backend.app.application.errors import AuthError
 from backend.app.application.ports.repositories import KnowledgeRepository
 from backend.app.domain.models import User
-from backend.app.infrastructure.repositories.sqlite import SQLiteKnowledgeRepository
+from backend.app.infrastructure.repositories.sqlalchemy import SQLAlchemyKnowledgeRepository
 
 
 def get_repository() -> KnowledgeRepository:
-    return SQLiteKnowledgeRepository()
+    return SQLAlchemyKnowledgeRepository()
 
 
 def get_auth_token(

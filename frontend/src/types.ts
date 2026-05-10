@@ -43,6 +43,7 @@ export type KnowledgeBase = {
 export type ChatMessage = {
   id: string
   role: 'user' | 'assistant'
+  sources?: AskSource[]
   text: string
   sourcePageIds?: string[]
 }
@@ -86,4 +87,13 @@ export type IngestionJob = {
   startedAt: string | null
   finishedAt: string | null
   error: string | null
+}
+
+export type AskSource = {
+  excerpt?: string
+  score?: number
+  sectionHeading: string
+  sourceId: string
+  sourceType: 'document' | 'page'
+  title: string
 }

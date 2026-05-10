@@ -1,6 +1,6 @@
 # RAG Base
 
-Локальная база знаний с ролями, редактором статей, поиском, SQLite backend API на FastAPI и подготовленным `/ask` endpoint.
+Локальная база знаний с ролями, markdown-базами, загрузкой документов и RAG-чатом. Backend: FastAPI + PostgreSQL + Qdrant + Ollama.
 
 ## Быстрый старт
 
@@ -9,6 +9,9 @@ npm --prefix frontend install
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r backend/requirements.txt
+npm run infra:up
+npm run infra:models
+npm run db:upgrade
 npm run seed
 npm run dev
 ```
@@ -17,7 +20,9 @@ npm run dev
 
 - frontend: `http://127.0.0.1:5173`
 - backend FastAPI: `http://127.0.0.1:4000`
-- SQLite: `backend/data/rag-base.sqlite`
+- PostgreSQL: `127.0.0.1:5432`, database `rag_service`
+- Qdrant: `http://127.0.0.1:6333`
+- Ollama: `http://127.0.0.1:11434`
 
 Если `5173` занят, Vite выберет следующий свободный порт.
 Команды `npm run dev`, `npm run build` и `npm run seed` автоматически используют `.venv/bin/python`, если виртуальное окружение создано. Если нужен другой интерпретатор, задайте `PYTHON=/path/to/python`.
@@ -29,17 +34,23 @@ npm run dev
 npm run dev
 npm run build
 npm run seed
+npm run infra:up
+npm run infra:models
+npm run infra:down
 npm run backend:dev
 npm run db:upgrade
 npm run test:backend
 ```
 
 - `dev` запускает frontend и backend вместе.
+- `infra:up` поднимает PostgreSQL, Qdrant и Ollama в Docker Compose.
+- `infra:models` скачивает локальные модели `qwen3:4b` и `embeddinggemma` в контейнер Ollama.
+- `infra:down` останавливает локальную инфраструктуру.
 - `backend:dev` запускает только FastAPI backend.
 - `build` собирает frontend и проверяет Python backend через `compileall`.
-- `seed` пересоздаёт демо-роли, пользователей и статьи в SQLite.
+- `seed` пересоздаёт демо-роли, пользователей и статьи.
 - `db:upgrade` применяет Alembic-миграции к `DATABASE_URL`.
-- `test:backend` запускает backend API smoke-тесты.
+- `test:backend` запускает backend API smoke-тесты. Тесты используют локальную SQLite-схему через SQLAlchemy, чтобы не требовать Docker.
 
 ## Демо-вход
 
@@ -50,15 +61,21 @@ npm run test:backend
 Backend проверяет пароль по PBKDF2-хэшу. Пароль демо-пользователей: `demo-password`.
 После входа backend выдаёт session token, frontend хранит его локально и отправляет в `Authorization: Bearer <token>`.
 
-## Документы и ingestion
+## Базы знаний, документы и RAG
 
-Backend поддерживает стартовый контур загрузки документов для будущего RAG:
+Backend поддерживает реальные API для текущего frontend:
 
-- `POST /documents` принимает multipart-файл, сохраняет оригинал в `UPLOAD_DIR` и создаёт ingestion job.
-- `GET /documents` возвращает загруженные документы.
-- `GET /documents/{document_id}/ingestion-jobs` показывает jobs по документу.
+- `GET/POST /knowledge-bases` управляет базами знаний.
+- `POST /knowledge-bases/{base_id}/sections` создаёт раздел.
+- `POST /knowledge-bases/{base_id}/pages` создаёт markdown-страницу.
+- `PATCH /knowledge-bases/{base_id}/pages/{page_id}` сохраняет markdown и переиндексирует страницу.
+- `POST /knowledge-bases/{base_id}/documents` принимает multipart-файл, сохраняет оригинал в `UPLOAD_DIR` и индексирует текстовые chunks.
+- `POST /knowledge-bases/{base_id}/ask` ищет chunks только внутри выбранной базы, сохраняет chat trace и отвечает через локальную модель.
 
-Загрузка доступна ролям `editor` и `admin`. Текущий ingestion job пока выполняет подготовительную заглушку и переводит документ в статус `indexed`.
+Загрузка и редактирование доступны ролям `editor` и `admin`. Новый signup создаёт локального `editor`, чтобы пользователь мог сразу работать с MVP. Старые `/documents` и `/ask` оставлены для совместимости smoke-тестов.
+
+После `npm run seed` создаётся тестовая база знаний `RAG Demo Support`. Для проверки RAG можно войти как
+`editor@ragbase.local`, открыть эту базу и спросить: `Что делать при ошибке RAG-77?` или `синий маркер Вега`.
 
 ## Переменные окружения
 
@@ -67,14 +84,15 @@ Backend поддерживает стартовый контур загрузк�
 - `PORT` задаёт порт backend.
 - `HOST` задаёт host для локального FastAPI-сервера.
 - `CORS_ORIGIN` ограничивает frontend-origin для backend.
-- `DB_PATH` задаёт путь к SQLite-файлу.
-- `DATABASE_URL` задаёт SQLAlchemy/Alembic подключение; для PostgreSQL используйте `postgresql+psycopg://...`.
+- `DATABASE_URL` задаёт SQLAlchemy/Alembic подключение к PostgreSQL.
 - `UPLOAD_DIR` задаёт папку для оригиналов загруженных документов.
 - `VITE_API_URL` задаёт backend URL для frontend.
+- `QDRANT_URL` и `QDRANT_COLLECTION` задают vector store.
+- `OLLAMA_BASE_URL`, `OLLAMA_CHAT_MODEL`, `OLLAMA_EMBED_MODEL` задают локальные LLM/embedding модели.
 
 ## Troubleshooting
 
-- Если backend не отвечает, frontend откроет localStorage fallback и покажет предупреждение в базе знаний.
-- Если нужно вернуть исходные данные backend, выполните `npm run seed`.
+- Если backend не видит таблицы, выполните `npm run db:upgrade`, затем `npm run seed`.
+- Если RAG отвечает fallback-текстом, проверьте `npm run infra:up` и `npm run infra:models`.
 - Если порт frontend занят, используйте URL, который напечатает Vite в терминале.
-- Для чистой SQLite-базы удалите `backend/data/rag-base.sqlite` и снова выполните `npm run seed`.
+- Для чистой локальной инфраструктуры выполните `npm run infra:down`, при необходимости удалите Docker volumes и снова запустите quick start.

@@ -1,6 +1,17 @@
 from typing import Protocol
 
-from backend.app.domain.models import Article, Document, DocumentChunk, IngestionJob, User, UserCredentials
+from backend.app.domain.models import (
+    Article,
+    Document,
+    DocumentChunk,
+    IngestionJob,
+    KnowledgeBase,
+    KnowledgePage,
+    KnowledgeSection,
+    RagChunk,
+    User,
+    UserCredentials,
+)
 
 
 class UserRepository(Protocol):
@@ -13,6 +24,8 @@ class UserRepository(Protocol):
     def get_user_credentials_by_role(self, role: str) -> UserCredentials | None: ...
 
     def create_user_session(self, user_id: str) -> str: ...
+
+    def create_user(self, user: UserCredentials) -> UserCredentials: ...
 
     def delete_user_session(self, token: str) -> bool: ...
 
@@ -28,7 +41,7 @@ class ArticleRepository(Protocol):
 
 
 class DocumentRepository(Protocol):
-    def list_documents(self) -> list[Document]: ...
+    def list_documents(self, knowledge_base_id: str | None = None) -> list[Document]: ...
 
     def get_document_by_id(self, document_id: str) -> Document | None: ...
 
@@ -57,5 +70,33 @@ class DocumentRepository(Protocol):
     def list_document_chunks(self) -> list[DocumentChunk]: ...
 
 
-class KnowledgeRepository(UserRepository, ArticleRepository, DocumentRepository, Protocol):
+class KnowledgeBaseRepository(Protocol):
+    def list_knowledge_bases(self, user: User) -> list[KnowledgeBase]: ...
+
+    def get_knowledge_base(self, base_id: str) -> KnowledgeBase | None: ...
+
+    def create_knowledge_base(self, base: KnowledgeBase) -> KnowledgeBase: ...
+
+    def create_knowledge_section(self, section: KnowledgeSection) -> KnowledgeSection: ...
+
+    def create_knowledge_page(self, page: KnowledgePage) -> KnowledgePage: ...
+
+    def update_knowledge_page(self, page_id: str, payload: dict[str, object]) -> KnowledgePage | None: ...
+
+    def get_knowledge_page(self, page_id: str) -> KnowledgePage | None: ...
+
+    def replace_rag_chunks(self, source_type: str, source_id: str, chunks: list[RagChunk]) -> list[RagChunk]: ...
+
+    def list_rag_chunks(self, knowledge_base_id: str) -> list[RagChunk]: ...
+
+    def create_chat_thread(self, thread: dict[str, object]) -> dict[str, object]: ...
+
+    def get_chat_thread(self, thread_id: str) -> dict[str, object] | None: ...
+
+    def create_chat_message(self, message: dict[str, object]) -> dict[str, object]: ...
+
+    def create_retrieval_trace(self, trace: dict[str, object]) -> dict[str, object]: ...
+
+
+class KnowledgeRepository(UserRepository, ArticleRepository, DocumentRepository, KnowledgeBaseRepository, Protocol):
     pass

@@ -85,7 +85,7 @@ function AuthScreen({
                 <Mail aria-hidden="true" />
                 <Input
                   autoComplete="email"
-                  defaultValue={isSignup ? '' : 'demo@ragbase.local'}
+                  defaultValue={isSignup ? '' : 'editor@ragbase.local'}
                   id={emailId}
                   name="email"
                   placeholder="you@company.ru"

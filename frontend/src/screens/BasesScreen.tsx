@@ -16,7 +16,9 @@ import type { KnowledgeBase } from '../types'
 
 type BasesScreenProps = {
   bases: KnowledgeBase[]
-  onCreateBase: (title: string) => KnowledgeBase
+  error?: string | null
+  isLoading?: boolean
+  onCreateBase: (title: string) => Promise<KnowledgeBase>
 }
 
 function formatDate(value: string) {
@@ -26,12 +28,12 @@ function formatDate(value: string) {
   }).format(new Date(value))
 }
 
-function BasesScreen({ bases, onCreateBase }: BasesScreenProps) {
+function BasesScreen({ bases, error, isLoading = false, onCreateBase }: BasesScreenProps) {
   const [createOpen, setCreateOpen] = useState(false)
   const navigate = useNavigate()
 
-  const createBase = (title: string) => {
-    const base = onCreateBase(title)
+  const createBase = async (title: string) => {
+    const base = await onCreateBase(title)
     navigate(`/bases/${base.id}`)
   }
 
@@ -48,6 +50,9 @@ function BasesScreen({ bases, onCreateBase }: BasesScreenProps) {
           Создать базу знаний
         </Button>
       </section>
+
+      {error ? <p className="bases-status">{error}</p> : null}
+      {isLoading ? <p className="bases-status">Загружаем базы знаний...</p> : null}
 
       {bases.length > 0 ? (
         <section className="bases-list" aria-label="Список баз знаний">

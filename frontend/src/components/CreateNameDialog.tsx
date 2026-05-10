@@ -20,7 +20,7 @@ type CreateNameDialogProps = {
   submitLabel: string
   title: string
   onOpenChange: (open: boolean) => void
-  onSubmit: (name: string) => void
+  onSubmit: (name: string) => Promise<void> | void
 }
 
 function CreateNameDialog({
@@ -36,6 +36,7 @@ function CreateNameDialog({
   const inputId = useId()
   const [name, setName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const changeOpen = (nextOpen: boolean) => {
     if (!nextOpen) {
@@ -46,7 +47,7 @@ function CreateNameDialog({
     onOpenChange(nextOpen)
   }
 
-  const submitForm = (event: FormEvent<HTMLFormElement>) => {
+  const submitForm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const normalizedName = name.trim()
@@ -56,10 +57,18 @@ function CreateNameDialog({
       return
     }
 
-    onSubmit(normalizedName)
-    setName('')
-    setError(null)
-    onOpenChange(false)
+    setIsSubmitting(true)
+
+    try {
+      await onSubmit(normalizedName)
+      setName('')
+      setError(null)
+      onOpenChange(false)
+    } catch {
+      setError('Не удалось сохранить. Попробуйте еще раз.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -91,9 +100,9 @@ function CreateNameDialog({
           </FieldGroup>
 
           <DialogFooter className="mt-4">
-            <Button type="submit">
+            <Button disabled={isSubmitting} type="submit">
               <Plus aria-hidden="true" data-icon="inline-start" />
-              {submitLabel}
+              {isSubmitting ? 'Сохраняем...' : submitLabel}
             </Button>
           </DialogFooter>
         </form>

@@ -28,6 +28,12 @@ class Settings(BaseModel):
     upload_dir: Path = Field(
         default_factory=lambda: Path(os.getenv("UPLOAD_DIR", str(BACKEND_DIR / "data" / "uploads")))
     )
+    qdrant_url: str = Field(default_factory=lambda: os.getenv("QDRANT_URL", "http://127.0.0.1:6333"))
+    qdrant_collection: str = Field(default_factory=lambda: os.getenv("QDRANT_COLLECTION", "rag_chunks"))
+    ollama_base_url: str = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434"))
+    ollama_chat_model: str = Field(default_factory=lambda: os.getenv("OLLAMA_CHAT_MODEL", "qwen3:4b"))
+    ollama_embed_model: str = Field(default_factory=lambda: os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma"))
+    rag_top_k: int = Field(default_factory=lambda: _read_int("RAG_TOP_K", 4))
 
     @property
     def allowed_origins(self) -> list[str]:

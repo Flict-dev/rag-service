@@ -4,7 +4,9 @@ import shutil
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.infrastructure.db.database import init_database, seed_database
+from backend.app.infrastructure.db.orm.models import Base
+from backend.app.infrastructure.db.orm.session import engine
+from backend.app.seed import main as seed_database
 from backend.app.main import app
 from backend.app.shared.config import get_settings
 
@@ -20,8 +22,9 @@ def client() -> Iterator[TestClient]:
 def reset_state() -> None:
     settings = get_settings()
     shutil.rmtree(settings.upload_dir, ignore_errors=True)
-    init_database()
-    seed_database(reset=True)
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    seed_database()
 
 
 def login(client: TestClient, email: str) -> str:
@@ -38,6 +41,16 @@ def auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def create_base(client: TestClient, token: str, title: str = "Support KB") -> dict[str, object]:
+    response = client.post(
+        "/knowledge-bases",
+        json={"title": title},
+        headers=auth_headers(token),
+    )
+    assert response.status_code == 201
+    return response.json()["base"]
+
+
 def test_login_me_and_logout_invalidate_session(client: TestClient) -> None:
     token = login(client, "editor@ragbase.local")
 
@@ -50,6 +63,47 @@ def test_login_me_and_logout_invalidate_session(client: TestClient) -> None:
 
     rejected_response = client.get("/me", headers=auth_headers(token))
     assert rejected_response.status_code == 401
+
+
+def test_register_creates_session_for_new_editor(client: TestClient) -> None:
+    response = client.post(
+        "/auth/register",
+        json={
+            "email": "new.editor@ragbase.local",
+            "name": "Новый редактор",
+            "password": "demo-password",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["user"]["email"] == "new.editor@ragbase.local"
+
+    me_response = client.get("/me", headers=auth_headers(payload["token"]))
+    assert me_response.status_code == 200
+    assert me_response.json()["user"]["role"] == "editor"
+
+
+def test_seeded_knowledge_base_answers_rag_question(client: TestClient) -> None:
+    editor_token = login(client, "editor@ragbase.local")
+
+    bases_response = client.get("/knowledge-bases", headers=auth_headers(editor_token))
+    assert bases_response.status_code == 200
+    bases = bases_response.json()["bases"]
+    demo_base = next((base for base in bases if base["id"] == "kb-rag-demo-support"), None)
+    assert demo_base is not None
+    assert demo_base["title"] == "RAG Demo Support"
+
+    answer_response = client.post(
+        "/knowledge-bases/kb-rag-demo-support/ask",
+        json={"question": "синий маркер Вега"},
+        headers=auth_headers(editor_token),
+    )
+    assert answer_response.status_code == 200
+    payload = answer_response.json()
+    assert payload["sources"][0]["sourceType"] == "page"
+    assert payload["sources"][0]["sourceId"] == "page-rag-demo-rag-77"
+    assert payload["traceId"]
 
 
 def test_reader_cannot_read_restricted_articles(client: TestClient) -> None:
@@ -227,3 +281,115 @@ def test_reader_cannot_upload_documents(client: TestClient) -> None:
         headers=auth_headers(reader_token),
     )
     assert response.status_code == 403
+
+
+def test_knowledge_base_sections_and_pages_persist(client: TestClient) -> None:
+    editor_token = login(client, "editor@ragbase.local")
+    base = create_base(client, editor_token, "API knowledge")
+
+    section_response = client.post(
+        f"/knowledge-bases/{base['id']}/sections",
+        json={"title": "Runbooks"},
+        headers=auth_headers(editor_token),
+    )
+    assert section_response.status_code == 201
+    section = section_response.json()["section"]
+
+    page_response = client.post(
+        f"/knowledge-bases/{base['id']}/pages",
+        json={"sectionId": section["id"], "title": "Password reset"},
+        headers=auth_headers(editor_token),
+    )
+    assert page_response.status_code == 201
+    page = page_response.json()["page"]
+
+    update_response = client.patch(
+        f"/knowledge-bases/{base['id']}/pages/{page['id']}",
+        json={"contentMd": "# Password reset\n\nUse the amber reset marker."},
+        headers=auth_headers(editor_token),
+    )
+    assert update_response.status_code == 200
+
+    get_response = client.get(f"/knowledge-bases/{base['id']}", headers=auth_headers(editor_token))
+    assert get_response.status_code == 200
+    saved_base = get_response.json()["base"]
+    assert any(candidate["title"] == "Runbooks" for candidate in saved_base["sections"])
+    assert any("amber reset marker" in candidate["contentMd"] for candidate in saved_base["pages"])
+
+
+def test_ask_is_scoped_to_selected_knowledge_base(client: TestClient) -> None:
+    editor_token = login(client, "editor@ragbase.local")
+    first_base = create_base(client, editor_token, "First")
+    second_base = create_base(client, editor_token, "Second")
+
+    first_section_id = first_base["sections"][0]["id"]
+    second_section_id = second_base["sections"][0]["id"]
+    first_page_response = client.post(
+        f"/knowledge-bases/{first_base['id']}/pages",
+        json={"sectionId": first_section_id, "title": "Neon runbook"},
+        headers=auth_headers(editor_token),
+    )
+    second_page_response = client.post(
+        f"/knowledge-bases/{second_base['id']}/pages",
+        json={"sectionId": second_section_id, "title": "Copper runbook"},
+        headers=auth_headers(editor_token),
+    )
+    first_page = first_page_response.json()["page"]
+    second_page = second_page_response.json()["page"]
+
+    client.patch(
+        f"/knowledge-bases/{first_base['id']}/pages/{first_page['id']}",
+        json={"contentMd": "Neon password reset marker lives only in the first base."},
+        headers=auth_headers(editor_token),
+    )
+    client.patch(
+        f"/knowledge-bases/{second_base['id']}/pages/{second_page['id']}",
+        json={"contentMd": "Copper billing marker lives only in the second base."},
+        headers=auth_headers(editor_token),
+    )
+
+    first_answer = client.post(
+        f"/knowledge-bases/{first_base['id']}/ask",
+        json={"question": "Neon password reset marker"},
+        headers=auth_headers(editor_token),
+    )
+    assert first_answer.status_code == 200
+    first_sources = first_answer.json()["sources"]
+    assert first_sources[0]["sourceType"] == "page"
+    assert first_sources[0]["sourceId"] == first_page["id"]
+
+    second_answer = client.post(
+        f"/knowledge-bases/{second_base['id']}/ask",
+        json={"question": "Neon password reset marker"},
+        headers=auth_headers(editor_token),
+    )
+    assert second_answer.status_code == 200
+    assert second_answer.json()["sources"] == []
+
+
+def test_uploaded_document_becomes_base_rag_source(client: TestClient) -> None:
+    editor_token = login(client, "editor@ragbase.local")
+    base = create_base(client, editor_token, "Uploads")
+
+    upload_response = client.post(
+        f"/knowledge-bases/{base['id']}/documents",
+        files={
+            "file": (
+                "upload-runbook.txt",
+                b"Orchid escalation marker lives only in this base upload.",
+                "text/plain",
+            )
+        },
+        headers=auth_headers(editor_token),
+    )
+    assert upload_response.status_code == 201
+
+    answer_response = client.post(
+        f"/knowledge-bases/{base['id']}/ask",
+        json={"question": "Orchid escalation marker"},
+        headers=auth_headers(editor_token),
+    )
+    assert answer_response.status_code == 200
+    sources = answer_response.json()["sources"]
+    assert sources[0]["sourceType"] == "document"
+    assert sources[0]["sourceId"] == upload_response.json()["document"]["id"]

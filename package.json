@@ -8,6 +8,9 @@
     "build": "npm --prefix frontend run build && node scripts/run-python.mjs -m compileall -q backend",
     "db:upgrade": "node scripts/run-python.mjs -m alembic -c backend/alembic.ini upgrade head",
     "dev": "node scripts/dev.mjs",
+    "infra:down": "node scripts/compose.mjs down",
+    "infra:models": "node scripts/compose.mjs exec ollama ollama pull qwen3:4b && node scripts/compose.mjs exec ollama ollama pull embeddinggemma",
+    "infra:up": "node scripts/compose.mjs up -d postgres qdrant ollama",
     "seed": "node scripts/run-python.mjs -m backend.app.seed",
     "test:backend": "node scripts/run-python.mjs -m pytest backend/tests"
   }

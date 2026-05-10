@@ -3,21 +3,22 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import './App.css'
 import Topbar from './components/Topbar'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { askKnowledgeBaseApi } from './api/ask'
+import { loginApi, logoutApi, registerApi } from './api/auth'
+import { uploadBaseDocumentApi } from './api/documents'
 import {
-  clearSession,
-  createKnowledgeBase,
-  loadAccounts,
-  loadBases,
-  loadSession,
-  saveAccounts,
-  saveBases,
-  saveSession,
-} from './lib/storage'
+  createKnowledgeBaseApi,
+  createKnowledgePageApi,
+  createKnowledgeSectionApi,
+  fetchKnowledgeBasesApi,
+  updateKnowledgePageApi,
+} from './api/knowledgeBases'
+import { clearSession, loadSession, saveSession } from './lib/storage'
 import AuthScreen, { type AuthFormValues } from './screens/AuthScreen'
 import BasesScreen from './screens/BasesScreen'
 import KnowledgeBaseScreen from './screens/KnowledgeBaseScreen'
 import LandingPage from './screens/LandingPage'
-import type { AuthMode, AuthSession, KnowledgeBase, LocalAccount } from './types'
+import type { AuthMode, AuthSession, KnowledgeBase, KnowledgePage } from './types'
 
 type NavigationState = {
   from?: {
@@ -27,18 +28,11 @@ type NavigationState = {
   }
 }
 
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase()
-}
-
-function createAccountId(email: string) {
-  return `user-${email.replace(/[^\p{L}\p{N}]+/gu, '-')}`
-}
-
 function App() {
   const [session, setSession] = useState<AuthSession | null>(() => loadSession())
-  const [accounts, setAccounts] = useState<LocalAccount[]>(() => loadAccounts())
-  const [bases, setBases] = useState<KnowledgeBase[]>(() => loadBases())
+  const [bases, setBases] = useState<KnowledgeBase[]>([])
+  const [basesLoading, setBasesLoading] = useState(() => Boolean(loadSession()?.token))
+  const [basesError, setBasesError] = useState<string | null>(null)
   const [authSubmitting, setAuthSubmitting] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const location = useLocation()
@@ -51,12 +45,32 @@ function App() {
   const showTopbar = landingRoute || (appRoute && Boolean(currentUser))
 
   useEffect(() => {
-    saveAccounts(accounts)
-  }, [accounts])
+    if (!session?.token) {
+      return
+    }
 
-  useEffect(() => {
-    saveBases(bases)
-  }, [bases])
+    let cancelled = false
+    fetchKnowledgeBasesApi(session.token)
+      .then((nextBases) => {
+        if (!cancelled) {
+          setBases(nextBases)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBasesError('Не удалось загрузить базы знаний.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBasesLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [session?.token])
 
   const openAuth = (mode: AuthMode) => {
     navigate(mode === 'signup' ? '/signup' : '/login')
@@ -85,8 +99,10 @@ function App() {
 
   const finishAuth = (nextSession: AuthSession) => {
     saveSession(nextSession)
+    setBasesLoading(true)
     setSession(nextSession)
     setAuthError(null)
+    setBasesError(null)
 
     const navigationState = location.state as NavigationState | null
     const from = navigationState?.from
@@ -98,8 +114,8 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleAuthSubmit = (authMode: AuthMode) => (values: AuthFormValues) => {
-    const email = normalizeEmail(values.email)
+  const handleAuthSubmit = (authMode: AuthMode) => async (values: AuthFormValues) => {
+    const email = values.email.trim().toLowerCase()
     const password = values.password.trim()
     const name = values.name?.trim()
 
@@ -118,48 +134,45 @@ function App() {
           return
         }
 
-        if (accounts.some((account) => account.email === email)) {
-          setAuthError('Аккаунт с такой почтой уже существует.')
-          return
-        }
-
-        const account: LocalAccount = {
-          id: createAccountId(email),
-          email,
-          name,
-          password,
-        }
-
-        setAccounts((currentAccounts) => [account, ...currentAccounts])
-        finishAuth({ token: account.id, user: { id: account.id, email: account.email, name: account.name } })
+        const nextSession = await registerApi({ email, name, password })
+        finishAuth(nextSession)
         return
       }
 
-      const account = accounts.find(
-        (candidate) => candidate.email === email && candidate.password === password,
-      )
-
-      if (!account) {
-        setAuthError('Почта или пароль не подходят.')
-        return
-      }
-
-      finishAuth({ token: account.id, user: { id: account.id, email: account.email, name: account.name } })
+      const nextSession = await loginApi({ email, password })
+      finishAuth(nextSession)
+    } catch {
+      setAuthError(authMode === 'signup' ? 'Не удалось зарегистрироваться.' : 'Почта или пароль не подходят.')
     } finally {
       setAuthSubmitting(false)
     }
   }
 
-  const signOut = () => {
+  const signOut = async () => {
+    if (session?.token) {
+      try {
+        await logoutApi(session.token)
+      } catch {
+        // Local cleanup still wins if the backend session is already gone.
+      }
+    }
+
     clearSession()
     setSession(null)
+    setBases([])
+    setBasesError(null)
+    setBasesLoading(false)
     setAuthError(null)
     navigate('/', { replace: true })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const createBase = (title: string) => {
-    const base = createKnowledgeBase(title, bases)
+  const createBase = async (title: string) => {
+    if (!session?.token) {
+      throw new Error('Auth required')
+    }
+
+    const base = await createKnowledgeBaseApi(session.token, title)
     setBases((currentBases) => [base, ...currentBases])
     return base
   }
@@ -168,6 +181,78 @@ function App() {
     setBases((currentBases) =>
       currentBases.map((base) => (base.id === nextBase.id ? nextBase : base)),
     )
+  }
+
+  const createSection = async (baseId: string, title: string) => {
+    if (!session?.token) {
+      throw new Error('Auth required')
+    }
+
+    const section = await createKnowledgeSectionApi(session.token, baseId, title)
+    setBases((currentBases) =>
+      currentBases.map((base) =>
+        base.id === baseId
+          ? { ...base, sections: [...base.sections, section], updatedAt: section.updatedAt }
+          : base,
+      ),
+    )
+    return section
+  }
+
+  const createPage = async (baseId: string, sectionId: string | undefined, title: string) => {
+    if (!session?.token) {
+      throw new Error('Auth required')
+    }
+
+    const page = await createKnowledgePageApi(session.token, baseId, sectionId, title)
+    setBases((currentBases) =>
+      currentBases.map((base) =>
+        base.id === baseId
+          ? { ...base, pages: [page, ...base.pages], updatedAt: page.updatedAt }
+          : base,
+      ),
+    )
+    return page
+  }
+
+  const savePage = async (
+    baseId: string,
+    pageId: string,
+    payload: Partial<Pick<KnowledgePage, 'contentMd' | 'sectionId' | 'title'>>,
+  ) => {
+    if (!session?.token) {
+      throw new Error('Auth required')
+    }
+
+    const page = await updateKnowledgePageApi(session.token, baseId, pageId, payload)
+    setBases((currentBases) =>
+      currentBases.map((base) =>
+        base.id === baseId
+          ? {
+              ...base,
+              pages: base.pages.map((candidate) => (candidate.id === page.id ? page : candidate)),
+              updatedAt: page.updatedAt,
+            }
+          : base,
+      ),
+    )
+    return page
+  }
+
+  const askBase = async (baseId: string, question: string) => {
+    if (!session?.token) {
+      throw new Error('Auth required')
+    }
+
+    return askKnowledgeBaseApi(session.token, baseId, question)
+  }
+
+  const uploadDocument = async (baseId: string, file: File) => {
+    if (!session?.token) {
+      throw new Error('Auth required')
+    }
+
+    return uploadBaseDocumentApi(session.token, baseId, file)
   }
 
   return (
@@ -219,7 +304,12 @@ function App() {
             path="/bases"
             element={
               currentUser ? (
-                <BasesScreen bases={bases} onCreateBase={createBase} />
+                <BasesScreen
+                  bases={bases}
+                  error={basesError}
+                  isLoading={basesLoading}
+                  onCreateBase={createBase}
+                />
               ) : (
                 <Navigate to="/login" replace state={{ from: location }} />
               )
@@ -229,7 +319,19 @@ function App() {
             path="/bases/:baseId"
             element={
               currentUser ? (
-                <KnowledgeBaseScreen bases={bases} onUpdateBase={updateBase} />
+                basesLoading ? (
+                  <main className="bases-page">Загружаем базу знаний...</main>
+                ) : (
+                  <KnowledgeBaseScreen
+                    bases={bases}
+                    onAsk={askBase}
+                    onCreatePage={createPage}
+                    onCreateSection={createSection}
+                    onSavePage={savePage}
+                    onUpdateBase={updateBase}
+                    onUploadDocument={uploadDocument}
+                  />
+                )
               ) : (
                 <Navigate to="/login" replace state={{ from: location }} />
               )
@@ -239,7 +341,19 @@ function App() {
             path="/bases/:baseId/page/:pageId"
             element={
               currentUser ? (
-                <KnowledgeBaseScreen bases={bases} onUpdateBase={updateBase} />
+                basesLoading ? (
+                  <main className="bases-page">Загружаем базу знаний...</main>
+                ) : (
+                  <KnowledgeBaseScreen
+                    bases={bases}
+                    onAsk={askBase}
+                    onCreatePage={createPage}
+                    onCreateSection={createSection}
+                    onSavePage={savePage}
+                    onUpdateBase={updateBase}
+                    onUploadDocument={uploadDocument}
+                  />
+                )
               ) : (
                 <Navigate to="/login" replace state={{ from: location }} />
               )
@@ -249,7 +363,19 @@ function App() {
             path="/bases/:baseId/section/:sectionId"
             element={
               currentUser ? (
-                <KnowledgeBaseScreen bases={bases} onUpdateBase={updateBase} />
+                basesLoading ? (
+                  <main className="bases-page">Загружаем базу знаний...</main>
+                ) : (
+                  <KnowledgeBaseScreen
+                    bases={bases}
+                    onAsk={askBase}
+                    onCreatePage={createPage}
+                    onCreateSection={createSection}
+                    onSavePage={savePage}
+                    onUpdateBase={updateBase}
+                    onUploadDocument={uploadDocument}
+                  />
+                )
               ) : (
                 <Navigate to="/login" replace state={{ from: location }} />
               )
