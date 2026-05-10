@@ -9,6 +9,7 @@ type TopbarProps = {
   onOpenBases: () => void
   onOpenLanding: () => void
   onSignOut: () => void
+  variant?: 'app' | 'landing'
 }
 
 function Topbar({
@@ -17,7 +18,36 @@ function Topbar({
   onOpenBases,
   onOpenLanding,
   onSignOut,
+  variant = 'landing',
 }: TopbarProps) {
+  if (variant === 'app') {
+    return (
+      <header className="topbar app-topbar" aria-label="Профиль пользователя">
+        <button
+          aria-label="Открыть список баз"
+          className="brand"
+          onClick={onOpenBases}
+          type="button"
+        >
+          <span className="brand-mark">R</span>
+          <span>RAG Base</span>
+        </button>
+
+        <div className="topbar-actions app-topbar-actions">
+          {currentUser ? (
+            <>
+              <span className="user-chip" title={currentUser.email}>{currentUser.name}</span>
+              <Button onClick={onSignOut} type="button" variant="ghost">
+                <LogOut aria-hidden="true" data-icon="inline-start" />
+                Выйти
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </header>
+    )
+  }
+
   const handleNavItemClick = (item: NavItem) => {
     if (item.opensBases) {
       onOpenBases()

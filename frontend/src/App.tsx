@@ -44,7 +44,11 @@ function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const currentUser = session?.user ?? null
-  const workspaceRoute = /^\/bases\/[^/]+/.test(location.pathname)
+  const authRoute = location.pathname === '/login' || location.pathname === '/signup'
+  const appRoute = location.pathname === '/bases' || location.pathname.startsWith('/bases/')
+  const workspaceRoute = location.pathname.startsWith('/bases/')
+  const landingRoute = location.pathname === '/'
+  const showTopbar = landingRoute || (appRoute && Boolean(currentUser))
 
   useEffect(() => {
     saveAccounts(accounts)
@@ -168,14 +172,15 @@ function App() {
 
   return (
     <TooltipProvider>
-      <div className="app-shell">
-        {!workspaceRoute ? (
+      <div className={workspaceRoute && currentUser ? 'app-shell app-shell-workspace' : 'app-shell'}>
+        {showTopbar && !authRoute ? (
           <Topbar
             currentUser={currentUser}
             onOpenAuth={openAuth}
             onOpenBases={openBases}
             onOpenLanding={openLanding}
             onSignOut={signOut}
+            variant={appRoute ? 'app' : 'landing'}
           />
         ) : null}
 
@@ -191,11 +196,9 @@ function App() {
             element={
               <AuthScreen
                 authMode="signin"
-                currentUser={currentUser}
                 error={authError}
                 isSubmitting={authSubmitting}
                 onAuthModeChange={switchAuthMode}
-                onBack={openLanding}
                 onSubmit={handleAuthSubmit('signin')}
               />
             }
@@ -205,11 +208,9 @@ function App() {
             element={
               <AuthScreen
                 authMode="signup"
-                currentUser={currentUser}
                 error={authError}
                 isSubmitting={authSubmitting}
                 onAuthModeChange={switchAuthMode}
-                onBack={openLanding}
                 onSubmit={handleAuthSubmit('signup')}
               />
             }
