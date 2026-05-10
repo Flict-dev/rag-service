@@ -1,26 +1,26 @@
-import type { FormEvent } from 'react'
-import {
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
-  KeyRound,
-  Mail,
-  UserCheck,
-  UserPlus,
-} from 'lucide-react'
-import { authBenefits, demoUsers, roleDescriptions, roleLabels } from '../data/demoData'
-import type { AuthMode, CurrentUser, UserRole } from '../types'
+import { type FormEvent, useId } from 'react'
+import { ArrowLeft, ArrowRight, KeyRound, Mail, UserRound } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import type { AuthMode, CurrentUser } from '../types'
+
+export type AuthFormValues = {
+  email: string
+  name?: string
+  password: string
+}
 
 type AuthScreenProps = {
   authMode: AuthMode
   currentUser: CurrentUser | null
   error?: string | null
   isSubmitting?: boolean
-  selectedRole: UserRole
   onAuthModeChange: (mode: AuthMode) => void
   onBack: () => void
-  onRoleChange: (role: UserRole) => void
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  onSubmit: (values: AuthFormValues) => void
 }
 
 function AuthScreen({
@@ -28,177 +28,121 @@ function AuthScreen({
   currentUser,
   error,
   isSubmitting = false,
-  selectedRole,
   onAuthModeChange,
   onBack,
-  onRoleChange,
   onSubmit,
 }: AuthScreenProps) {
   const isSignup = authMode === 'signup'
-  const selectedDemoUser =
-    demoUsers.find((user) => user.role === selectedRole) ?? demoUsers[1]
+  const nameId = useId()
+  const emailId = useId()
+  const passwordId = useId()
+
+  const submitForm = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const formData = new FormData(event.currentTarget)
+
+    onSubmit({
+      email: String(formData.get('email') || ''),
+      name: isSignup ? String(formData.get('name') || '') : undefined,
+      password: String(formData.get('password') || ''),
+    })
+  }
 
   return (
     <main className="auth-page">
-      <section className="auth-section" aria-labelledby="auth-title">
+      <section className="auth-panel" aria-labelledby="auth-title">
         <div className="auth-copy">
-          <button className="back-button" onClick={onBack} type="button">
-            <ArrowLeft aria-hidden="true" size={16} />
-            <span>Вернуться на лендинг</span>
-          </button>
+          <Button className="auth-back" onClick={onBack} type="button" variant="ghost">
+            <ArrowLeft aria-hidden="true" data-icon="inline-start" />
+            На главную
+          </Button>
 
-          <span className="eyebrow">Вход</span>
-          <h1 id="auth-title">
-            {isSignup ? 'Создайте рабочий доступ' : 'Войдите в базу знаний'}
-          </h1>
+          <span className="ui-kicker">Вход в рабочее пространство</span>
+          <h1 id="auth-title">{isSignup ? 'Создайте аккаунт' : 'Войдите в базу знаний'}</h1>
           <p>
-            Защищённый вход открывает персональную роль и сразу включает нужный
-            набор действий в базе знаний.
+            Доступ открывает список ваших баз знаний. Внутри остаются только разделы,
+            markdown-файлы и чат-поиск по документам.
           </p>
-
-          <div className="auth-benefits">
-            {authBenefits.map((benefit) => (
-              <span key={benefit}>
-                <CheckCircle2 aria-hidden="true" size={16} />
-                {benefit}
-              </span>
-            ))}
-          </div>
         </div>
 
         <div className="auth-card">
-          <div className="auth-tabs" role="tablist" aria-label="Тип авторизации">
-            <button
-              aria-selected={!isSignup}
-              className={!isSignup ? 'active' : ''}
-              onClick={() => onAuthModeChange('signin')}
-              role="tab"
-              type="button"
-            >
+          <ToggleGroup
+            aria-label="Тип авторизации"
+            className="auth-tabs"
+            onValueChange={(value) => {
+              if (value === 'signin' || value === 'signup') {
+                onAuthModeChange(value)
+              }
+            }}
+            type="single"
+            value={authMode}
+            variant="outline"
+          >
+            <ToggleGroupItem value="signin">
               Вход
-            </button>
-            <button
-              aria-selected={isSignup}
-              className={isSignup ? 'active' : ''}
-              onClick={() => onAuthModeChange('signup')}
-              role="tab"
-              type="button"
-            >
+            </ToggleGroupItem>
+            <ToggleGroupItem value="signup">
               Регистрация
-            </button>
-          </div>
+            </ToggleGroupItem>
+          </ToggleGroup>
 
-          <form className="auth-form" onSubmit={onSubmit}>
-            {isSignup && (
-              <label className="field-label">
-                <span>Имя</span>
-                <span className="input-shell">
-                  <UserPlus aria-hidden="true" size={18} />
-                  <input name="name" placeholder="Максим Зданов" type="text" />
-                </span>
-              </label>
-            )}
+          <form className="auth-form" onSubmit={submitForm}>
+            <FieldGroup>
+              {isSignup ? (
+                <Field>
+                  <FieldLabel htmlFor={nameId}>Имя</FieldLabel>
+                  <div className="icon-field">
+                    <UserRound aria-hidden="true" />
+                    <Input id={nameId} name="name" placeholder="Имя" type="text" />
+                  </div>
+                </Field>
+              ) : null}
 
-            <label className="field-label">
-              <span>Email</span>
-              <span className="input-shell">
-                <Mail aria-hidden="true" size={18} />
-                <input
-                  defaultValue={isSignup ? '' : selectedDemoUser.email}
-                  key={isSignup ? 'signup-email' : selectedDemoUser.email}
-                  name="email"
-                  placeholder="you@company.ru"
-                  type="email"
-                />
-              </span>
-            </label>
+              <Field>
+                <FieldLabel htmlFor={emailId}>Почта</FieldLabel>
+                <div className="icon-field">
+                  <Mail aria-hidden="true" />
+                  <Input
+                    autoComplete="email"
+                    defaultValue={isSignup ? '' : 'demo@ragbase.local'}
+                    id={emailId}
+                    name="email"
+                    placeholder="you@company.ru"
+                    type="email"
+                  />
+                </div>
+              </Field>
 
-            <label className="field-label">
-              <span>Пароль</span>
-              <span className="input-shell">
-                <KeyRound aria-hidden="true" size={18} />
-                <input
-                  defaultValue={isSignup ? '' : 'demo-password'}
-                  name="password"
-                  placeholder="Минимум 8 символов"
-                  type="password"
-                />
-              </span>
-            </label>
+              <Field data-invalid={Boolean(error)}>
+                <FieldLabel htmlFor={passwordId}>Пароль</FieldLabel>
+                <div className="icon-field">
+                  <KeyRound aria-hidden="true" />
+                  <Input
+                    autoComplete={isSignup ? 'new-password' : 'current-password'}
+                    defaultValue={isSignup ? '' : 'demo-password'}
+                    id={passwordId}
+                    name="password"
+                    placeholder="Минимум 8 символов"
+                    type="password"
+                    aria-invalid={Boolean(error)}
+                  />
+                </div>
+                {error ? <FieldError>{error}</FieldError> : null}
+              </Field>
+            </FieldGroup>
 
-            {!isSignup && (
-              <fieldset className="role-fieldset">
-                <legend>Быстрый выбор демо-роли</legend>
-                {demoUsers.map((user) => (
-                  <label
-                    className={selectedRole === user.role ? 'role-option active' : 'role-option'}
-                    key={user.id}
-                  >
-                    <input
-                      checked={selectedRole === user.role}
-                      name="demoRole"
-                      onChange={() => onRoleChange(user.role)}
-                      type="radio"
-                      value={user.role}
-                    />
-                    <span>
-                      <strong>{roleLabels[user.role]}</strong>
-                      <small>
-                        {user.email} · {roleDescriptions[user.role]}
-                      </small>
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-            )}
-
-            {isSignup && (
-              <fieldset className="role-fieldset">
-                <legend>Роль в базе знаний</legend>
-                {(['reader', 'editor', 'admin'] as UserRole[]).map((role) => (
-                  <label
-                    className={selectedRole === role ? 'role-option active' : 'role-option'}
-                    key={role}
-                  >
-                    <input
-                      checked={selectedRole === role}
-                      name="role"
-                      onChange={() => onRoleChange(role)}
-                      type="radio"
-                      value={role}
-                    />
-                    <span>
-                      <strong>{roleLabels[role]}</strong>
-                      <small>{roleDescriptions[role]}</small>
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-            )}
-
-            {error && <div className="auth-error">{error}</div>}
-
-            <button className="primary-button wide" disabled={isSubmitting} type="submit">
-              <span>
-                {isSubmitting ? 'Подключаемся...' : isSignup ? 'Создать доступ' : 'Войти в демо'}
-              </span>
-              <ArrowRight aria-hidden="true" size={17} />
-            </button>
+            <Button className="auth-submit" disabled={isSubmitting} type="submit">
+              {isSubmitting ? 'Проверяем...' : isSignup ? 'Зарегистрироваться' : 'Войти'}
+              <ArrowRight aria-hidden="true" data-icon="inline-end" />
+            </Button>
           </form>
 
-          {currentUser && (
-            <div className="session-card" aria-live="polite">
-              <span className="session-icon">
-                <UserCheck aria-hidden="true" size={20} />
-              </span>
-              <div>
-                <strong>{currentUser.name}</strong>
-                <span>
-                  {currentUser.email} · {roleLabels[currentUser.role]}
-                </span>
-              </div>
+          {currentUser ? (
+            <div className="session-note" aria-live="polite">
+              Уже вошли как {currentUser.name}. <Link to="/bases">Открыть базы знаний</Link>
             </div>
-          )}
+          ) : null}
         </div>
       </section>
     </main>

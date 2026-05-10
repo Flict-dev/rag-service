@@ -1,10 +1,9 @@
-import type { AuthSession, UserRole } from '../types'
+import type { AuthSession } from '../types'
 import { apiRequest } from './client'
 
 type LoginRequest = {
   email?: string
   password?: string
-  role?: UserRole
 }
 
 type LoginResponse = AuthSession

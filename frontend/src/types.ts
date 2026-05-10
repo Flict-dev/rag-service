@@ -1,14 +1,9 @@
 export type AuthMode = 'signin' | 'signup'
-export type UserRole = 'reader' | 'editor' | 'admin'
-export type ArticleStatus = 'draft' | 'review' | 'published'
-export type DocumentStatus = 'queued' | 'processing' | 'indexed' | 'failed'
-export type IngestionJobStatus = 'queued' | 'processing' | 'completed' | 'failed'
 
 export type CurrentUser = {
   id: string
   name: string
   email: string
-  role: UserRole
 }
 
 export type AuthSession = {
@@ -16,26 +11,60 @@ export type AuthSession = {
   user: CurrentUser
 }
 
-export type ArticleSection = {
-  heading: string
-  paragraphs: string[]
-  bullets?: string[]
+export type LocalAccount = CurrentUser & {
+  password: string
 }
 
-export type KnowledgeArticle = {
+export type KnowledgePage = {
   id: string
-  group: string
+  sectionId: string
   title: string
-  description: string
-  owner: string
-  ownerId: string
+  contentMd: string
   createdAt: string
   updatedAt: string
-  status: ArticleStatus
-  access: UserRole[]
-  tags: string[]
-  sections: ArticleSection[]
 }
+
+export type KnowledgeSection = {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type KnowledgeBase = {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+  sections: KnowledgeSection[]
+  pages: KnowledgePage[]
+}
+
+export type ChatMessage = {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  sourcePageIds?: string[]
+}
+
+export type CreateTarget =
+  | {
+      parentSectionId?: string
+      type: 'page'
+    }
+  | {
+      parentSectionId?: string
+      type: 'section'
+    }
+
+export type NavItem = {
+  label: string
+  sectionId?: string
+  opensBases?: boolean
+}
+
+export type DocumentStatus = 'queued' | 'processing' | 'indexed' | 'failed'
+export type IngestionJobStatus = 'queued' | 'processing' | 'completed' | 'failed'
 
 export type KnowledgeDocument = {
   id: string
@@ -57,17 +86,4 @@ export type IngestionJob = {
   startedAt: string | null
   finishedAt: string | null
   error: string | null
-}
-
-export type EditorAccess = {
-  name: string
-  role: UserRole
-  scope: string
-  status: string
-}
-
-export type NavItem = {
-  label: string
-  sectionId?: string
-  opensDocs?: boolean
 }

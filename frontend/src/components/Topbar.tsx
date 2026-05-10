@@ -1,11 +1,12 @@
-import { ArrowRight, BookOpen, LogOut, UserCheck } from 'lucide-react'
-import { navItems, roleLabels } from '../data/demoData'
+import { ArrowRight, BookOpen, LogOut } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { navItems } from '../data/demoData'
 import type { AuthMode, CurrentUser, NavItem } from '../types'
 
 type TopbarProps = {
   currentUser: CurrentUser | null
   onOpenAuth: (mode: AuthMode) => void
-  onOpenDocs: () => void
+  onOpenBases: () => void
   onOpenLanding: () => void
   onSignOut: () => void
 }
@@ -13,22 +14,20 @@ type TopbarProps = {
 function Topbar({
   currentUser,
   onOpenAuth,
-  onOpenDocs,
+  onOpenBases,
   onOpenLanding,
   onSignOut,
 }: TopbarProps) {
   const handleNavItemClick = (item: NavItem) => {
-    if (item.opensDocs) {
-      onOpenDocs()
+    if (item.opensBases) {
+      onOpenBases()
       return
     }
 
     onOpenLanding()
 
-    const sectionId = item.sectionId
-
     window.setTimeout(() => {
-      document.getElementById(sectionId ?? 'home')?.scrollIntoView({
+      document.getElementById(item.sectionId ?? 'home')?.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       })
@@ -53,28 +52,25 @@ function Topbar({
       <div className="topbar-actions">
         {currentUser ? (
           <>
-            <button className="primary-button compact" onClick={onOpenDocs} type="button">
-              <BookOpen aria-hidden="true" size={16} />
-              <span>База</span>
-            </button>
-            <span className="user-chip">
-              <UserCheck aria-hidden="true" size={15} />
-              {roleLabels[currentUser.role]}
-            </span>
-            <button className="ghost-link icon-link" onClick={onSignOut} type="button">
-              <LogOut aria-hidden="true" size={16} />
-              <span>Выйти</span>
-            </button>
+            <Button onClick={onOpenBases} type="button">
+              <BookOpen aria-hidden="true" data-icon="inline-start" />
+              Базы
+            </Button>
+            <span className="user-chip">{currentUser.name}</span>
+            <Button onClick={onSignOut} type="button" variant="ghost">
+              <LogOut aria-hidden="true" data-icon="inline-start" />
+              Выйти
+            </Button>
           </>
         ) : (
           <>
-            <button className="ghost-link" onClick={() => onOpenAuth('signin')} type="button">
+            <Button onClick={() => onOpenAuth('signin')} type="button" variant="ghost">
               Войти
-            </button>
-            <button className="primary-button" onClick={() => onOpenAuth('signup')} type="button">
-              <span>Начать</span>
-              <ArrowRight aria-hidden="true" size={16} />
-            </button>
+            </Button>
+            <Button onClick={() => onOpenAuth('signup')} type="button">
+              Начать
+              <ArrowRight aria-hidden="true" data-icon="inline-end" />
+            </Button>
           </>
         )}
       </div>
