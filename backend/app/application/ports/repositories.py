@@ -6,6 +6,7 @@ from backend.app.domain.models import (
     DocumentChunk,
     IngestionJob,
     KnowledgeBase,
+    KnowledgeBaseMember,
     KnowledgePage,
     KnowledgeSection,
     RagChunk,
@@ -76,6 +77,16 @@ class KnowledgeBaseRepository(Protocol):
     def get_knowledge_base(self, base_id: str) -> KnowledgeBase | None: ...
 
     def create_knowledge_base(self, base: KnowledgeBase) -> KnowledgeBase: ...
+
+    def add_knowledge_base_member(self, member: KnowledgeBaseMember) -> KnowledgeBaseMember: ...
+
+    def update_knowledge_base_member_role(
+        self,
+        base_id: str,
+        user_id: str,
+        role: str,
+        updated_at: str,
+    ) -> KnowledgeBaseMember | None: ...
 
     def create_knowledge_section(self, section: KnowledgeSection) -> KnowledgeSection: ...
 

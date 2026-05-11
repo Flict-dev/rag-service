@@ -68,7 +68,7 @@ def register(
             "id": f"user-{uuid4().hex}",
             "name": normalized_name,
             "email": normalized_email,
-            "role": "editor",
+            "role": "reader",
             "passwordHash": password_hasher.hash(normalized_password),
         }
     )

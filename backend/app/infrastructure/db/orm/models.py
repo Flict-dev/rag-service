@@ -31,6 +31,11 @@ class User(Base):
     )
     documents: Mapped[list["Document"]] = relationship(back_populates="uploader")
     knowledge_bases: Mapped[list["KnowledgeBase"]] = relationship(back_populates="owner")
+    knowledge_base_memberships: Mapped[list["KnowledgeBaseMember"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="KnowledgeBaseMember.user_id",
+    )
 
 
 class UserSession(Base):
@@ -195,6 +200,32 @@ class KnowledgeBase(Base):
         order_by="KnowledgePage.updated_at.desc()",
     )
     documents: Mapped[list[Document]] = relationship(back_populates="knowledge_base")
+    members: Mapped[list["KnowledgeBaseMember"]] = relationship(
+        back_populates="knowledge_base",
+        cascade="all, delete-orphan",
+    )
+
+
+class KnowledgeBaseMember(Base):
+    __tablename__ = "knowledge_base_members"
+
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    role_id: Mapped[str] = mapped_column(ForeignKey("roles.id"), nullable=False)
+    invited_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+    knowledge_base: Mapped[KnowledgeBase] = relationship(back_populates="members")
+    user: Mapped[User] = relationship(
+        back_populates="knowledge_base_memberships",
+        foreign_keys=[user_id],
+    )
+    role: Mapped[Role] = relationship()
+    inviter: Mapped[User | None] = relationship(foreign_keys=[invited_by])
 
 
 class KnowledgeSection(Base):

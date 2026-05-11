@@ -12,6 +12,7 @@ from backend.app.domain.models import (
     DocumentChunk,
     IngestionJob,
     KnowledgeBase,
+    KnowledgeBaseMember,
     KnowledgePage,
     KnowledgeSection,
     RagChunk,
@@ -202,15 +203,47 @@ def _to_page(page: orm.KnowledgePage | None) -> KnowledgePage | None:
     }
 
 
-def _to_knowledge_base(base: orm.KnowledgeBase | None) -> KnowledgeBase | None:
-    if not base:
+def _to_knowledge_base_member(
+    member: orm.KnowledgeBaseMember | None,
+    owner_id: str,
+) -> KnowledgeBaseMember | None:
+    if not member or not member.user:
         return None
 
     return {
+        "userId": member.user_id,
+        "name": member.user.name,
+        "email": member.user.email,
+        "role": "admin" if member.user_id == owner_id else member.role_id,
+        "createdAt": member.created_at,
+        "updatedAt": member.updated_at,
+        "isOwner": member.user_id == owner_id,
+    }
+
+
+def _to_knowledge_base(base: orm.KnowledgeBase | None, viewer_id: str | None = None) -> KnowledgeBase | None:
+    if not base:
+        return None
+
+    members = [
+        member
+        for item in sorted(
+            base.members,
+            key=lambda candidate: (
+                candidate.user_id != base.owner_id,
+                candidate.user.name.casefold() if candidate.user else "",
+            ),
+        )
+        if (member := _to_knowledge_base_member(item, base.owner_id)) is not None
+    ]
+    payload: KnowledgeBase = {
         "id": base.id,
         "title": base.title,
+        "ownerId": base.owner_id,
+        "ownerName": base.owner.name if base.owner else "",
         "createdAt": base.created_at,
         "updatedAt": base.updated_at,
+        "members": members,
         "sections": [
             section
             for item in sorted(base.sections, key=lambda section: section.position)
@@ -222,6 +255,16 @@ def _to_knowledge_base(base: orm.KnowledgeBase | None) -> KnowledgeBase | None:
             if (page := _to_page(item)) is not None
         ],
     }
+
+    if viewer_id:
+        viewer_member = next((member for member in members if member["userId"] == viewer_id), None)
+        payload["myRole"] = (
+            "admin"
+            if base.owner_id == viewer_id
+            else str(viewer_member["role"]) if viewer_member else None
+        )
+
+    return payload
 
 
 def _to_rag_chunk(chunk: orm.RagChunk | None) -> RagChunk | None:
@@ -530,25 +573,115 @@ class SQLAlchemyKnowledgeRepository:
         with session_scope() as session:
             bases = session.scalars(
                 select(orm.KnowledgeBase)
+                .join(orm.KnowledgeBaseMember)
                 .options(
+                    selectinload(orm.KnowledgeBase.owner),
+                    selectinload(orm.KnowledgeBase.members).selectinload(orm.KnowledgeBaseMember.user),
                     selectinload(orm.KnowledgeBase.sections),
                     selectinload(orm.KnowledgeBase.pages),
                 )
+                .where(orm.KnowledgeBaseMember.user_id == str(user["id"]))
                 .order_by(orm.KnowledgeBase.updated_at.desc(), orm.KnowledgeBase.title.asc())
             ).all()
-            return [base for item in bases if (base := _to_knowledge_base(item)) is not None]
+            return [
+                base
+                for item in bases
+                if (base := _to_knowledge_base(item, str(user["id"]))) is not None
+            ]
 
     def get_knowledge_base(self, base_id: str) -> KnowledgeBase | None:
         with session_scope() as session:
             base = session.scalar(
                 select(orm.KnowledgeBase)
                 .options(
+                    selectinload(orm.KnowledgeBase.owner),
+                    selectinload(orm.KnowledgeBase.members).selectinload(orm.KnowledgeBaseMember.user),
                     selectinload(orm.KnowledgeBase.sections),
                     selectinload(orm.KnowledgeBase.pages),
                 )
                 .where(orm.KnowledgeBase.id == base_id)
             )
             return _to_knowledge_base(base)
+
+    def add_knowledge_base_member(self, member: KnowledgeBaseMember) -> KnowledgeBaseMember:
+        with session_scope() as session:
+            existing = session.get(
+                orm.KnowledgeBaseMember,
+                {
+                    "knowledge_base_id": str(member["knowledgeBaseId"]),
+                    "user_id": str(member["userId"]),
+                },
+            )
+            if existing:
+                result = _to_knowledge_base_member(existing, existing.knowledge_base.owner_id)
+                if result is None:
+                    raise RuntimeError("existing knowledge base member was not found")
+                return result
+
+            membership = orm.KnowledgeBaseMember(
+                knowledge_base_id=str(member["knowledgeBaseId"]),
+                user_id=str(member["userId"]),
+                role_id=str(member["role"]),
+                invited_by=str(member["invitedBy"]) if member.get("invitedBy") else None,
+                created_at=str(member["createdAt"]),
+                updated_at=str(member["updatedAt"]),
+            )
+            session.add(membership)
+            base = session.get(orm.KnowledgeBase, str(member["knowledgeBaseId"]))
+            if base:
+                base.updated_at = str(member["updatedAt"])
+            session.flush()
+            saved_member = session.scalar(
+                select(orm.KnowledgeBaseMember)
+                .options(
+                    selectinload(orm.KnowledgeBaseMember.user),
+                    selectinload(orm.KnowledgeBaseMember.knowledge_base),
+                )
+                .where(
+                    orm.KnowledgeBaseMember.knowledge_base_id == str(member["knowledgeBaseId"]),
+                    orm.KnowledgeBaseMember.user_id == str(member["userId"]),
+                )
+            )
+            saved_payload = _to_knowledge_base_member(saved_member, str(base.owner_id if base else ""))
+            if saved_payload is None:
+                raise RuntimeError("created knowledge base member was not found")
+            return saved_payload
+
+    def update_knowledge_base_member_role(
+        self,
+        base_id: str,
+        user_id: str,
+        role: str,
+        updated_at: str,
+    ) -> KnowledgeBaseMember | None:
+        with session_scope() as session:
+            member = session.get(
+                orm.KnowledgeBaseMember,
+                {
+                    "knowledge_base_id": base_id,
+                    "user_id": user_id,
+                },
+            )
+            if not member:
+                return None
+            member.role_id = role
+            member.updated_at = updated_at
+            base = session.get(orm.KnowledgeBase, base_id)
+            if base:
+                base.updated_at = updated_at
+            session.flush()
+            saved_member = session.scalar(
+                select(orm.KnowledgeBaseMember)
+                .options(
+                    selectinload(orm.KnowledgeBaseMember.user),
+                    selectinload(orm.KnowledgeBaseMember.knowledge_base),
+                )
+                .where(
+                    orm.KnowledgeBaseMember.knowledge_base_id == base_id,
+                    orm.KnowledgeBaseMember.user_id == user_id,
+                )
+            )
+            return _to_knowledge_base_member(saved_member, str(base.owner_id if base else ""))
 
     def create_knowledge_base(self, base: KnowledgeBase) -> KnowledgeBase:
         with session_scope() as session:
@@ -565,6 +698,8 @@ class SQLAlchemyKnowledgeRepository:
             saved_base = session.scalar(
                 select(orm.KnowledgeBase)
                 .options(
+                    selectinload(orm.KnowledgeBase.owner),
+                    selectinload(orm.KnowledgeBase.members).selectinload(orm.KnowledgeBaseMember.user),
                     selectinload(orm.KnowledgeBase.sections),
                     selectinload(orm.KnowledgeBase.pages),
                 )

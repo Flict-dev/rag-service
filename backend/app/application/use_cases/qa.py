@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from backend.app.application.errors import BadRequestError, NotFoundError
+from backend.app.application.knowledge_base_access import require_base_access
 from backend.app.application.knowledge_service import (
     build_answer_from_results,
     can_read_article,
@@ -60,6 +61,7 @@ class QaUseCases:
         base = self.repository.get_knowledge_base(base_id)
         if not base:
             raise NotFoundError("Knowledge base not found")
+        require_base_access(base, user)
 
         chunks = self.repository.list_rag_chunks(base_id)
         search_results = (

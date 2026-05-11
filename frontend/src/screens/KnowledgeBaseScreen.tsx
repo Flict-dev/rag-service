@@ -20,10 +20,13 @@ import {
   Plus,
   Save,
   Send,
+  Share2,
+  ShieldAlert,
   Undo2,
   Upload,
+  Users,
 } from 'lucide-react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -32,6 +35,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,15 +47,31 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group'
+import { Input } from '@/components/ui/input'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import {
   Sidebar,
   SidebarContent,
@@ -80,18 +101,30 @@ import {
   pageSummary,
 } from '../lib/knowledge'
 import type { AskResponse } from '../api/ask'
-import type { ChatMessage, CreateTarget, KnowledgeBase, KnowledgePage, KnowledgeSection } from '../types'
+import type {
+  BaseRole,
+  ChatMessage,
+  CreateTarget,
+  CurrentUser,
+  KnowledgeBase,
+  KnowledgeBaseMember,
+  KnowledgePage,
+  KnowledgeSection,
+} from '../types'
 
 type KnowledgeBaseScreenProps = {
   bases: KnowledgeBase[]
+  currentUser: CurrentUser
   onAsk: (baseId: string, question: string) => Promise<AskResponse>
   onCreatePage: (baseId: string, sectionId: string | undefined, title: string) => Promise<KnowledgePage>
   onCreateSection: (baseId: string, title: string) => Promise<KnowledgeSection>
+  onInviteMember: (baseId: string, email: string) => Promise<KnowledgeBaseMember>
   onSavePage: (
     baseId: string,
     pageId: string,
     payload: Partial<Pick<KnowledgePage, 'contentMd' | 'sectionId' | 'title'>>,
   ) => Promise<KnowledgePage>
+  onUpdateMemberRole: (baseId: string, userId: string, role: BaseRole) => Promise<KnowledgeBaseMember>
   onUpdateBase: (base: KnowledgeBase) => void
   onUploadDocument: (baseId: string, file: File) => Promise<unknown>
 }
@@ -107,6 +140,7 @@ type BaseSidebarProps = {
   activeSectionId?: string
   base: KnowledgeBase
   bases: KnowledgeBase[]
+  canEdit: boolean
   onCreateRequest: (target: CreateTarget) => void
 }
 
@@ -115,6 +149,20 @@ type ChatPanelProps = {
   messages: ChatMessage[]
   onAsk: (question: string) => void
   onOpenPage: (pageId: string) => void
+}
+
+const baseRoles: BaseRole[] = ['reader', 'editor', 'admin']
+
+function roleLabel(role: BaseRole) {
+  return {
+    admin: 'Админ',
+    editor: 'Редактор',
+    reader: 'Читатель',
+  }[role]
+}
+
+function canEditBase(role: BaseRole) {
+  return role === 'editor' || role === 'admin'
 }
 
 function ActionMenu({
@@ -152,6 +200,7 @@ function BaseSidebar({
   activeSectionId,
   base,
   bases,
+  canEdit,
   onCreateRequest,
 }: BaseSidebarProps) {
   const navigate = useNavigate()
@@ -231,27 +280,29 @@ function BaseSidebar({
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Структура</SidebarGroupLabel>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <SidebarGroupAction aria-label="Создать в базе" title="Создать">
-                <Plus aria-hidden="true" />
-              </SidebarGroupAction>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  onClick={() => onCreateRequest({ parentSectionId: base.sections[0]?.id, type: 'page' })}
-                >
-                  <FileText aria-hidden="true" />
-                  Файл
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onCreateRequest({ type: 'section' })}>
-                  <Folder aria-hidden="true" />
-                  Раздел
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {canEdit ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarGroupAction aria-label="Создать в базе" title="Создать">
+                  <Plus aria-hidden="true" />
+                </SidebarGroupAction>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    onClick={() => onCreateRequest({ parentSectionId: base.sections[0]?.id, type: 'page' })}
+                  >
+                    <FileText aria-hidden="true" />
+                    Файл
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onCreateRequest({ type: 'section' })}>
+                    <Folder aria-hidden="true" />
+                    Раздел
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
           <SidebarGroupContent>
             <SidebarMenu>
               {base.sections.map((section) => {
@@ -284,10 +335,12 @@ function BaseSidebar({
                         </Link>
                       </SidebarMenuButton>
                     </div>
-                    <ActionMenu
-                      onCreatePage={() => onCreateRequest({ parentSectionId: section.id, type: 'page' })}
-                      onCreateSection={() => onCreateRequest({ type: 'section' })}
-                    />
+                    {canEdit ? (
+                      <ActionMenu
+                        onCreatePage={() => onCreateRequest({ parentSectionId: section.id, type: 'page' })}
+                        onCreateSection={() => onCreateRequest({ type: 'section' })}
+                      />
+                    ) : null}
 
                     {isOpen ? (
                       <SidebarMenuSub>
@@ -493,12 +546,198 @@ function BaseOverview({ base }: { base: KnowledgeBase }) {
   )
 }
 
+function AccessDeniedScreen() {
+  return (
+    <main className="access-denied-page">
+      <Alert>
+        <ShieldAlert aria-hidden="true" />
+        <AlertTitle>Нет доступа</AlertTitle>
+        <AlertDescription>
+          Эта база доступна только участникам команды. Попросите администратора добавить вашу почту.
+        </AlertDescription>
+      </Alert>
+      <Button asChild variant="outline">
+        <Link to="/bases">К списку баз</Link>
+      </Button>
+    </main>
+  )
+}
+
+function TeamSheet({
+  base,
+  currentUser,
+  onInviteMember,
+  onOpenChange,
+  onUpdateMemberRole,
+  open,
+}: {
+  base: KnowledgeBase
+  currentUser: CurrentUser
+  onInviteMember: (baseId: string, email: string) => Promise<KnowledgeBaseMember>
+  onOpenChange: (open: boolean) => void
+  onUpdateMemberRole: (baseId: string, userId: string, role: BaseRole) => Promise<KnowledgeBaseMember>
+  open: boolean
+}) {
+  const [email, setEmail] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<string | null>(null)
+  const [isInviting, setIsInviting] = useState(false)
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
+  const emailId = 'team-member-email'
+  const isAdmin = base.myRole === 'admin'
+
+  const submitInvite = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
+      setError('Введите почту зарегистрированного пользователя.')
+      return
+    }
+
+    setIsInviting(true)
+    setError(null)
+    setStatus(null)
+
+    try {
+      await onInviteMember(base.id, normalizedEmail)
+      setEmail('')
+      setStatus('Пользователь добавлен в команду.')
+    } catch {
+      setError('Не удалось добавить пользователя.')
+    } finally {
+      setIsInviting(false)
+    }
+  }
+
+  const updateRole = async (member: KnowledgeBaseMember, role: BaseRole) => {
+    if (member.role === role || member.isOwner) {
+      return
+    }
+
+    setUpdatingUserId(member.userId)
+    setError(null)
+    setStatus(null)
+
+    try {
+      await onUpdateMemberRole(base.id, member.userId, role)
+      setStatus('Роль обновлена.')
+    } catch {
+      setError('Не удалось обновить роль.')
+    } finally {
+      setUpdatingUserId(null)
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="team-sheet">
+        <SheetHeader>
+          <SheetTitle>Команда базы</SheetTitle>
+          <SheetDescription>{base.title}</SheetDescription>
+        </SheetHeader>
+
+        <div className="team-sheet-content">
+          {isAdmin ? (
+            <form className="team-invite-form" onSubmit={submitInvite}>
+              <FieldGroup>
+                <Field data-invalid={Boolean(error)}>
+                  <FieldLabel htmlFor={emailId}>Почта сотрудника</FieldLabel>
+                  <Input
+                    autoComplete="email"
+                    id={emailId}
+                    name="email"
+                    onChange={(event) => {
+                      setEmail(event.target.value)
+                      setError(null)
+                    }}
+                    placeholder="user@company.ru"
+                    type="email"
+                    value={email}
+                    aria-invalid={Boolean(error)}
+                  />
+                  {error ? <FieldError>{error}</FieldError> : null}
+                </Field>
+              </FieldGroup>
+              <Button disabled={isInviting} type="submit">
+                <Users aria-hidden="true" data-icon="inline-start" />
+                {isInviting ? 'Добавляем...' : 'Добавить'}
+              </Button>
+            </form>
+          ) : (
+            <Alert>
+              <Users aria-hidden="true" />
+              <AlertTitle>Только просмотр</AlertTitle>
+              <AlertDescription>Приглашать сотрудников и менять роли может админ базы.</AlertDescription>
+            </Alert>
+          )}
+
+          {status ? <p className="team-status">{status}</p> : null}
+
+          <div className="team-member-list">
+            {base.members.map((member) => {
+              const isCurrentUser = member.userId === currentUser.id
+              const canChangeRole = isAdmin && !member.isOwner
+
+              return (
+                <div className="team-member-row" key={member.userId}>
+                  <span className="team-member-avatar" aria-hidden="true">
+                    {member.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="team-member-main">
+                    <strong>
+                      {member.name}
+                      {isCurrentUser ? ' · вы' : ''}
+                    </strong>
+                    <small>{member.email}</small>
+                  </span>
+                  {canChangeRole ? (
+                    <Select
+                      disabled={updatingUserId === member.userId}
+                      onValueChange={(value) => {
+                        if (baseRoles.includes(value as BaseRole)) {
+                          void updateRole(member, value as BaseRole)
+                        }
+                      }}
+                      value={member.role}
+                    >
+                      <SelectTrigger className="team-role-select" size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {baseRoles.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {roleLabel(role)}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
+                      {roleLabel(member.role)}
+                    </Badge>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
 function KnowledgeBaseScreen({
   bases,
+  currentUser,
   onAsk,
   onCreatePage,
   onCreateSection,
+  onInviteMember,
   onSavePage,
+  onUpdateMemberRole,
   onUpdateBase,
   onUploadDocument,
 }: KnowledgeBaseScreenProps) {
@@ -510,12 +749,14 @@ function KnowledgeBaseScreen({
   const navigate = useNavigate()
   const base = bases.find((candidate) => candidate.id === baseId)
   const [chatOpen, setChatOpen] = useState(false)
+  const [teamOpen, setTeamOpen] = useState(false)
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null)
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isAnswering, setIsAnswering] = useState(false)
   const [isSavingPage, setIsSavingPage] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [shareStatus, setShareStatus] = useState<string | null>(null)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -552,15 +793,17 @@ function KnowledgeBaseScreen({
   }, [createTarget?.type])
 
   if (!base) {
-    return <Navigate to="/bases" replace />
+    return <AccessDeniedScreen />
   }
+
+  const canEdit = canEditBase(base.myRole)
 
   const updateBase = (nextBase: KnowledgeBase) => {
     onUpdateBase(nextBase)
   }
 
   const createItem = async (name: string) => {
-    if (!createTarget) {
+    if (!createTarget || !canEdit) {
       return
     }
 
@@ -596,7 +839,7 @@ function KnowledgeBaseScreen({
   }
 
   const startPageEditing = () => {
-    if (!selectedPage) {
+    if (!selectedPage || !canEdit) {
       return
     }
 
@@ -681,6 +924,10 @@ function KnowledgeBaseScreen({
   }
 
   const pickDocument = () => {
+    if (!canEdit) {
+      return
+    }
+
     uploadInputRef.current?.click()
   }
 
@@ -688,7 +935,7 @@ function KnowledgeBaseScreen({
     const file = event.target.files?.[0]
     event.target.value = ''
 
-    if (!file || isUploading) {
+    if (!file || isUploading || !canEdit) {
       return
     }
 
@@ -701,6 +948,18 @@ function KnowledgeBaseScreen({
       setUploadStatus('Не удалось загрузить документ.')
     } finally {
       setIsUploading(false)
+    }
+  }
+
+  const shareBase = async () => {
+    const shareUrl = `${window.location.origin}/bases/${base.id}`
+    setShareStatus(null)
+
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setShareStatus('Ссылка скопирована.')
+    } catch {
+      setShareStatus(shareUrl)
     }
   }
 
@@ -719,6 +978,7 @@ function KnowledgeBaseScreen({
           activeSectionId={selectedSection?.id}
           base={base}
           bases={bases}
+          canEdit={canEdit}
           onCreateRequest={setCreateTarget}
         />
 
@@ -762,7 +1022,7 @@ function KnowledgeBaseScreen({
                   </Breadcrumb>
 
                   <div className="kb-header-actions">
-                    {selectedPage ? (
+                    {selectedPage && canEdit ? (
                       <>
                         {isEditingSelectedPage ? (
                           <Button
@@ -790,16 +1050,28 @@ function KnowledgeBaseScreen({
                         </Button>
                       </>
                     ) : null}
-                    <input
-                      accept=".md,.txt,.csv,.json,.log,text/*,application/json"
-                      className="sr-only"
-                      onChange={uploadDocument}
-                      ref={uploadInputRef}
-                      type="file"
-                    />
-                    <Button disabled={isUploading} onClick={pickDocument} type="button" variant="outline">
-                      <Upload aria-hidden="true" data-icon="inline-start" />
-                      {isUploading ? 'Загружаем...' : 'Загрузить'}
+                    {canEdit ? (
+                      <>
+                        <input
+                          accept=".md,.txt,.csv,.json,.log,text/*,application/json"
+                          className="sr-only"
+                          onChange={uploadDocument}
+                          ref={uploadInputRef}
+                          type="file"
+                        />
+                        <Button disabled={isUploading} onClick={pickDocument} type="button" variant="outline">
+                          <Upload aria-hidden="true" data-icon="inline-start" />
+                          {isUploading ? 'Загружаем...' : 'Загрузить'}
+                        </Button>
+                      </>
+                    ) : null}
+                    <Button onClick={() => setTeamOpen(true)} type="button" variant="outline">
+                      <Users aria-hidden="true" data-icon="inline-start" />
+                      Команда
+                    </Button>
+                    <Button onClick={shareBase} type="button" variant="outline">
+                      <Share2 aria-hidden="true" data-icon="inline-start" />
+                      Поделиться
                     </Button>
                     <Button
                       aria-pressed={chatOpen}
@@ -816,6 +1088,7 @@ function KnowledgeBaseScreen({
 
                 <ScrollArea className="kb-content-scroll">
                   <div className="kb-content kb-content-wide">
+                    {shareStatus ? <p className="kb-upload-status">{shareStatus}</p> : null}
                     {uploadStatus ? <p className="kb-upload-status">{uploadStatus}</p> : null}
                     {selectedPage ? (
                       isEditingSelectedPage ? (
@@ -879,6 +1152,14 @@ function KnowledgeBaseScreen({
           }
         }}
         onSubmit={createItem}
+      />
+      <TeamSheet
+        base={base}
+        currentUser={currentUser}
+        onInviteMember={onInviteMember}
+        onOpenChange={setTeamOpen}
+        onUpdateMemberRole={onUpdateMemberRole}
+        open={teamOpen}
       />
     </main>
   )

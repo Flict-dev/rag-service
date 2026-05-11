@@ -65,23 +65,23 @@ def test_login_me_and_logout_invalidate_session(client: TestClient) -> None:
     assert rejected_response.status_code == 401
 
 
-def test_register_creates_session_for_new_editor(client: TestClient) -> None:
+def test_register_creates_session_for_new_reader(client: TestClient) -> None:
     response = client.post(
         "/auth/register",
         json={
-            "email": "new.editor@ragbase.local",
-            "name": "Новый редактор",
+            "email": "new.reader@ragbase.local",
+            "name": "Новый читатель",
             "password": "demo-password",
         },
     )
 
     assert response.status_code == 201
     payload = response.json()
-    assert payload["user"]["email"] == "new.editor@ragbase.local"
+    assert payload["user"]["email"] == "new.reader@ragbase.local"
 
     me_response = client.get("/me", headers=auth_headers(payload["token"]))
     assert me_response.status_code == 200
-    assert me_response.json()["user"]["role"] == "editor"
+    assert me_response.json()["user"]["role"] == "reader"
 
 
 def test_seeded_knowledge_base_answers_rag_question(client: TestClient) -> None:
@@ -104,6 +104,26 @@ def test_seeded_knowledge_base_answers_rag_question(client: TestClient) -> None:
     assert payload["sources"][0]["sourceType"] == "page"
     assert payload["sources"][0]["sourceId"] == "page-rag-demo-rag-77"
     assert payload["traceId"]
+
+
+def test_seeded_pasta_cookbook_has_recipes_and_answers(client: TestClient) -> None:
+    editor_token = login(client, "editor@ragbase.local")
+
+    base_response = client.get("/knowledge-bases/kb-pasta-cookbook", headers=auth_headers(editor_token))
+    assert base_response.status_code == 200
+    base = base_response.json()["base"]
+    assert base["title"] == "Книга рецептов пасты"
+    assert len(base["pages"]) >= 20
+
+    answer_response = client.post(
+        "/knowledge-bases/kb-pasta-cookbook/ask",
+        json={"question": "янтарный перец Карбонара-01"},
+        headers=auth_headers(editor_token),
+    )
+    assert answer_response.status_code == 200
+    payload = answer_response.json()
+    assert payload["sources"][0]["sourceType"] == "page"
+    assert payload["sources"][0]["sourceId"] == "page-pasta-carbonara"
 
 
 def test_reader_cannot_read_restricted_articles(client: TestClient) -> None:
@@ -393,3 +413,153 @@ def test_uploaded_document_becomes_base_rag_source(client: TestClient) -> None:
     sources = answer_response.json()["sources"]
     assert sources[0]["sourceType"] == "document"
     assert sources[0]["sourceId"] == upload_response.json()["document"]["id"]
+
+
+def test_registered_reader_can_create_base_and_becomes_base_admin(client: TestClient) -> None:
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "email": "owner.reader@ragbase.local",
+            "name": "Reader Owner",
+            "password": "demo-password",
+        },
+    )
+    assert register_response.status_code == 201
+    payload = register_response.json()
+    token = payload["token"]
+    user_id = payload["user"]["id"]
+    assert payload["user"]["role"] == "reader"
+
+    base = create_base(client, token, "Reader owned base")
+
+    assert base["ownerId"] == user_id
+    assert base["myRole"] == "admin"
+    assert base["members"] == [
+        {
+            "userId": user_id,
+            "name": "Reader Owner",
+            "email": "owner.reader@ragbase.local",
+            "role": "admin",
+            "createdAt": base["createdAt"],
+            "updatedAt": base["createdAt"],
+            "isOwner": True,
+        }
+    ]
+
+
+def test_knowledge_base_access_requires_membership(client: TestClient) -> None:
+    editor_token = login(client, "editor@ragbase.local")
+    reader_token = login(client, "reader@ragbase.local")
+    base = create_base(client, editor_token, "Private base")
+
+    reader_bases_response = client.get("/knowledge-bases", headers=auth_headers(reader_token))
+    assert reader_bases_response.status_code == 200
+    assert all(candidate["id"] != base["id"] for candidate in reader_bases_response.json()["bases"])
+
+    get_response = client.get(f"/knowledge-bases/{base['id']}", headers=auth_headers(reader_token))
+    assert get_response.status_code == 403
+
+    ask_response = client.post(
+        f"/knowledge-bases/{base['id']}/ask",
+        json={"question": "private marker"},
+        headers=auth_headers(reader_token),
+    )
+    assert ask_response.status_code == 403
+
+    upload_response = client.post(
+        f"/knowledge-bases/{base['id']}/documents",
+        files={"file": ("reader.txt", b"reader upload", "text/plain")},
+        headers=auth_headers(reader_token),
+    )
+    assert upload_response.status_code == 403
+
+
+def test_base_admin_invites_reader_and_updates_member_role(client: TestClient) -> None:
+    editor_token = login(client, "editor@ragbase.local")
+    reader_token = login(client, "reader@ragbase.local")
+    base = create_base(client, editor_token, "Team base")
+
+    invite_response = client.post(
+        f"/knowledge-bases/{base['id']}/members",
+        json={"email": "reader@ragbase.local"},
+        headers=auth_headers(editor_token),
+    )
+    assert invite_response.status_code == 201
+    invited_member = invite_response.json()["member"]
+    assert invited_member["email"] == "reader@ragbase.local"
+    assert invited_member["role"] == "reader"
+
+    reader_base_response = client.get(f"/knowledge-bases/{base['id']}", headers=auth_headers(reader_token))
+    assert reader_base_response.status_code == 200
+    reader_base = reader_base_response.json()["base"]
+    assert reader_base["myRole"] == "reader"
+
+    reader_page_response = client.post(
+        f"/knowledge-bases/{base['id']}/pages",
+        json={"sectionId": base["sections"][0]["id"], "title": "Reader page"},
+        headers=auth_headers(reader_token),
+    )
+    assert reader_page_response.status_code == 403
+
+    reader_upload_response = client.post(
+        f"/knowledge-bases/{base['id']}/documents",
+        files={"file": ("reader.txt", b"reader upload", "text/plain")},
+        headers=auth_headers(reader_token),
+    )
+    assert reader_upload_response.status_code == 403
+
+    ask_response = client.post(
+        f"/knowledge-bases/{base['id']}/ask",
+        json={"question": "anything here"},
+        headers=auth_headers(reader_token),
+    )
+    assert ask_response.status_code == 200
+
+    role_response = client.patch(
+        f"/knowledge-bases/{base['id']}/members/{invited_member['userId']}",
+        json={"role": "editor"},
+        headers=auth_headers(editor_token),
+    )
+    assert role_response.status_code == 200
+    assert role_response.json()["member"]["role"] == "editor"
+
+    editor_page_response = client.post(
+        f"/knowledge-bases/{base['id']}/pages",
+        json={"sectionId": base["sections"][0]["id"], "title": "Editor page"},
+        headers=auth_headers(reader_token),
+    )
+    assert editor_page_response.status_code == 201
+
+
+def test_only_base_admin_can_manage_members_and_owner_role_is_locked(client: TestClient) -> None:
+    editor_token = login(client, "editor@ragbase.local")
+    reader_token = login(client, "reader@ragbase.local")
+    base = create_base(client, editor_token, "Team permissions")
+
+    invite_response = client.post(
+        f"/knowledge-bases/{base['id']}/members",
+        json={"email": "reader@ragbase.local"},
+        headers=auth_headers(editor_token),
+    )
+    assert invite_response.status_code == 201
+
+    reader_invite_response = client.post(
+        f"/knowledge-bases/{base['id']}/members",
+        json={"email": "admin@ragbase.local"},
+        headers=auth_headers(reader_token),
+    )
+    assert reader_invite_response.status_code == 403
+
+    reader_role_response = client.patch(
+        f"/knowledge-bases/{base['id']}/members/demo-reader",
+        json={"role": "editor"},
+        headers=auth_headers(reader_token),
+    )
+    assert reader_role_response.status_code == 403
+
+    owner_role_response = client.patch(
+        f"/knowledge-bases/{base['id']}/members/{base['ownerId']}",
+        json={"role": "reader"},
+        headers=auth_headers(editor_token),
+    )
+    assert owner_role_response.status_code == 400

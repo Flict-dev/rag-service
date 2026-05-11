@@ -8,6 +8,7 @@ const defaultAccount: LocalAccount = {
   id: 'demo-user',
   name: 'Пользователь',
   email: 'demo@ragbase.local',
+  role: 'reader',
   password: 'demo-password',
 }
 
@@ -62,6 +63,7 @@ function normalizeAccount(value: unknown): LocalAccount | null {
     id: typeof candidate.id === 'string' ? candidate.id : `user-${slugify(candidate.email)}`,
     name: candidate.name.trim() || candidate.email,
     email: candidate.email.trim().toLowerCase(),
+    role: candidate.role === 'admin' || candidate.role === 'editor' ? candidate.role : 'reader',
     password: candidate.password,
   }
 }
@@ -113,6 +115,43 @@ function normalizeBase(value: unknown): KnowledgeBase | null {
   }
 
   const timestamp = nowIso()
+  const ownerId = typeof candidate.ownerId === 'string' ? candidate.ownerId : 'demo-user'
+  const ownerName = typeof candidate.ownerName === 'string' ? candidate.ownerName : 'Пользователь'
+  const myRole =
+    candidate.myRole === 'admin' || candidate.myRole === 'editor' || candidate.myRole === 'reader'
+      ? candidate.myRole
+      : 'admin'
+  const members: KnowledgeBase['members'] = Array.isArray(candidate.members)
+    ? candidate.members
+        .filter(
+          (member): member is KnowledgeBase['members'][number] =>
+            !!member &&
+            typeof member === 'object' &&
+            typeof member.userId === 'string' &&
+            typeof member.name === 'string' &&
+            typeof member.email === 'string' &&
+            (member.role === 'admin' || member.role === 'editor' || member.role === 'reader'),
+        )
+        .map((member) => ({
+          userId: member.userId,
+          name: member.name,
+          email: member.email,
+          role: member.userId === ownerId ? 'admin' : member.role,
+          createdAt: typeof member.createdAt === 'string' ? member.createdAt : timestamp,
+          updatedAt: typeof member.updatedAt === 'string' ? member.updatedAt : timestamp,
+          isOwner: member.userId === ownerId,
+        }))
+    : [
+        {
+          userId: ownerId,
+          name: ownerName,
+          email: 'demo@ragbase.local',
+          role: 'admin',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          isOwner: true,
+        },
+      ]
   const sections = candidate.sections
     .filter(
       (section): section is KnowledgeBase['sections'][number] =>
@@ -136,6 +175,10 @@ function normalizeBase(value: unknown): KnowledgeBase | null {
   return {
     id: candidate.id,
     title: candidate.title.trim() || 'База знаний',
+    ownerId,
+    ownerName,
+    myRole,
+    members,
     createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : timestamp,
     updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : timestamp,
     sections,
@@ -150,6 +193,20 @@ function createSeedBases(): KnowledgeBase[] {
     {
       id: 'base-support',
       title: 'База поддержки',
+      ownerId: 'demo-user',
+      ownerName: 'Пользователь',
+      myRole: 'admin',
+      members: [
+        {
+          userId: 'demo-user',
+          name: 'Пользователь',
+          email: 'demo@ragbase.local',
+          role: 'admin',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          isOwner: true,
+        },
+      ],
       createdAt: timestamp,
       updatedAt: timestamp,
       sections: [
@@ -250,12 +307,13 @@ export function loadSession(): AuthSession | null {
 
     return {
       token: parsedValue.token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      },
-    }
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role === 'admin' || user.role === 'editor' ? user.role : 'reader',
+    },
+  }
   } catch {
     return null
   }
@@ -325,6 +383,20 @@ export function createKnowledgeBase(title: string, bases: KnowledgeBase[]): Know
   return {
     id: createId('base', title, bases.map((base) => base.id)),
     title: title.trim() || 'Новая база знаний',
+    ownerId: 'demo-user',
+    ownerName: 'Пользователь',
+    myRole: 'admin',
+    members: [
+      {
+        userId: 'demo-user',
+        name: 'Пользователь',
+        email: 'demo@ragbase.local',
+        role: 'admin',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        isOwner: true,
+      },
+    ],
     createdAt: timestamp,
     updatedAt: timestamp,
     sections: [

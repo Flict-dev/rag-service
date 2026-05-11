@@ -1,4 +1,11 @@
-import type { IngestionJob, KnowledgeBase, KnowledgePage, KnowledgeSection } from '../types'
+import type {
+  BaseRole,
+  IngestionJob,
+  KnowledgeBase,
+  KnowledgeBaseMember,
+  KnowledgePage,
+  KnowledgeSection,
+} from '../types'
 import { apiRequest } from './client'
 
 type BasesResponse = {
@@ -16,6 +23,10 @@ type SectionResponse = {
 type PageResponse = {
   job?: IngestionJob
   page: KnowledgePage
+}
+
+type MemberResponse = {
+  member: KnowledgeBaseMember
 }
 
 export async function fetchKnowledgeBasesApi(token: string) {
@@ -72,4 +83,27 @@ export async function updateKnowledgePageApi(
     token,
   })
   return data.page
+}
+
+export async function inviteKnowledgeBaseMemberApi(token: string, baseId: string, email: string) {
+  const data = await apiRequest<MemberResponse>(`/knowledge-bases/${baseId}/members`, {
+    body: { email },
+    method: 'POST',
+    token,
+  })
+  return data.member
+}
+
+export async function updateKnowledgeBaseMemberRoleApi(
+  token: string,
+  baseId: string,
+  userId: string,
+  role: BaseRole,
+) {
+  const data = await apiRequest<MemberResponse>(`/knowledge-bases/${baseId}/members/${userId}`, {
+    body: { role },
+    method: 'PATCH',
+    token,
+  })
+  return data.member
 }

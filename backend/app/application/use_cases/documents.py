@@ -25,7 +25,10 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _can_manage_documents(user: User) -> bool:
+def _can_manage_documents(user: User, base_role: str | None = None) -> bool:
+    if base_role:
+        return base_role in {"editor", "admin"}
+
     return user["role"] in {"editor", "admin"}
 
 
@@ -109,8 +112,13 @@ class DocumentUseCases:
         self.storage = storage
         self.rag_service = rag_service
 
-    def list_documents(self, user: User, knowledge_base_id: str | None = None) -> list[Document]:
-        if not _can_manage_documents(user):
+    def list_documents(
+        self,
+        user: User,
+        knowledge_base_id: str | None = None,
+        base_role: str | None = None,
+    ) -> list[Document]:
+        if not _can_manage_documents(user, base_role):
             raise PermissionDeniedError("Only editor and admin can manage documents")
 
         return self.repository.list_documents(knowledge_base_id)
@@ -123,8 +131,9 @@ class DocumentUseCases:
         content_type: str | None,
         content: bytes,
         knowledge_base_id: str | None = None,
+        base_role: str | None = None,
     ) -> dict[str, object]:
-        if not _can_manage_documents(user):
+        if not _can_manage_documents(user, base_role):
             raise PermissionDeniedError("Only editor and admin can upload documents")
 
         if not filename:

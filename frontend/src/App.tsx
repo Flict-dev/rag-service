@@ -11,6 +11,8 @@ import {
   createKnowledgePageApi,
   createKnowledgeSectionApi,
   fetchKnowledgeBasesApi,
+  inviteKnowledgeBaseMemberApi,
+  updateKnowledgeBaseMemberRoleApi,
   updateKnowledgePageApi,
 } from './api/knowledgeBases'
 import { clearSession, loadSession, saveSession } from './lib/storage'
@@ -18,7 +20,7 @@ import AuthScreen, { type AuthFormValues } from './screens/AuthScreen'
 import BasesScreen from './screens/BasesScreen'
 import KnowledgeBaseScreen from './screens/KnowledgeBaseScreen'
 import LandingPage from './screens/LandingPage'
-import type { AuthMode, AuthSession, KnowledgeBase, KnowledgePage } from './types'
+import type { AuthMode, AuthSession, BaseRole, KnowledgeBase, KnowledgeBaseMember, KnowledgePage } from './types'
 
 type NavigationState = {
   from?: {
@@ -183,6 +185,47 @@ function App() {
     )
   }
 
+  const mergeBaseMember = (baseId: string, member: KnowledgeBaseMember) => {
+    setBases((currentBases) =>
+      currentBases.map((base) => {
+        if (base.id !== baseId) {
+          return base
+        }
+
+        const members = base.members.some((candidate) => candidate.userId === member.userId)
+          ? base.members.map((candidate) => (candidate.userId === member.userId ? member : candidate))
+          : [...base.members, member]
+
+        return {
+          ...base,
+          members,
+          myRole: member.userId === currentUser?.id ? member.role : base.myRole,
+          updatedAt: member.updatedAt,
+        }
+      }),
+    )
+  }
+
+  const inviteMember = async (baseId: string, email: string) => {
+    if (!session?.token) {
+      throw new Error('Auth required')
+    }
+
+    const member = await inviteKnowledgeBaseMemberApi(session.token, baseId, email)
+    mergeBaseMember(baseId, member)
+    return member
+  }
+
+  const updateMemberRole = async (baseId: string, userId: string, role: BaseRole) => {
+    if (!session?.token) {
+      throw new Error('Auth required')
+    }
+
+    const member = await updateKnowledgeBaseMemberRoleApi(session.token, baseId, userId, role)
+    mergeBaseMember(baseId, member)
+    return member
+  }
+
   const createSection = async (baseId: string, title: string) => {
     if (!session?.token) {
       throw new Error('Auth required')
@@ -306,6 +349,7 @@ function App() {
               currentUser ? (
                 <BasesScreen
                   bases={bases}
+                  currentUser={currentUser}
                   error={basesError}
                   isLoading={basesLoading}
                   onCreateBase={createBase}
@@ -324,16 +368,19 @@ function App() {
                 ) : (
                   <KnowledgeBaseScreen
                     bases={bases}
+                    currentUser={currentUser}
                     onAsk={askBase}
                     onCreatePage={createPage}
                     onCreateSection={createSection}
+                    onInviteMember={inviteMember}
                     onSavePage={savePage}
+                    onUpdateMemberRole={updateMemberRole}
                     onUpdateBase={updateBase}
                     onUploadDocument={uploadDocument}
                   />
                 )
               ) : (
-                <Navigate to="/login" replace state={{ from: location }} />
+                <Navigate to="/signup" replace state={{ from: location }} />
               )
             }
           />
@@ -346,16 +393,19 @@ function App() {
                 ) : (
                   <KnowledgeBaseScreen
                     bases={bases}
+                    currentUser={currentUser}
                     onAsk={askBase}
                     onCreatePage={createPage}
                     onCreateSection={createSection}
+                    onInviteMember={inviteMember}
                     onSavePage={savePage}
+                    onUpdateMemberRole={updateMemberRole}
                     onUpdateBase={updateBase}
                     onUploadDocument={uploadDocument}
                   />
                 )
               ) : (
-                <Navigate to="/login" replace state={{ from: location }} />
+                <Navigate to="/signup" replace state={{ from: location }} />
               )
             }
           />
@@ -368,16 +418,19 @@ function App() {
                 ) : (
                   <KnowledgeBaseScreen
                     bases={bases}
+                    currentUser={currentUser}
                     onAsk={askBase}
                     onCreatePage={createPage}
                     onCreateSection={createSection}
+                    onInviteMember={inviteMember}
                     onSavePage={savePage}
+                    onUpdateMemberRole={updateMemberRole}
                     onUpdateBase={updateBase}
                     onUploadDocument={uploadDocument}
                   />
                 )
               ) : (
-                <Navigate to="/login" replace state={{ from: location }} />
+                <Navigate to="/signup" replace state={{ from: location }} />
               )
             }
           />

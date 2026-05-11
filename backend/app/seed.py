@@ -25,6 +25,7 @@ def _clear_database() -> None:
             orm.Document,
             orm.KnowledgePage,
             orm.KnowledgeSection,
+            orm.KnowledgeBaseMember,
             orm.KnowledgeBase,
             orm.ArticleSection,
             orm.ArticleTag,
@@ -74,6 +75,16 @@ def _seed_knowledge_bases() -> None:
                 "updatedAt": base["updatedAt"],
                 "sections": [],
                 "pages": [],
+            }
+        )
+        repository.add_knowledge_base_member(
+            {
+                "knowledgeBaseId": base["id"],
+                "userId": base["ownerId"],
+                "role": "admin",
+                "invitedBy": base["ownerId"],
+                "createdAt": base["createdAt"],
+                "updatedAt": base["updatedAt"],
             }
         )
 

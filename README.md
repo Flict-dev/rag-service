@@ -2,17 +2,38 @@
 
 Локальная база знаний с ролями, markdown-базами, загрузкой документов и RAG-чатом. Backend: FastAPI + PostgreSQL + Qdrant + Ollama.
 
-## Быстрый старт
+## Запуск приложения
+
+### Требования
+
+- Node.js и npm для frontend-части.
+- Python 3 с модулем `venv` для backend-части.
+- Docker и Docker Compose для локальных PostgreSQL, Qdrant и Ollama.
+
+
+### Первый запуск
+
+Установите зависимости, поднимите локальную инфраструктуру, примените миграции и заполните демо-данные:
 
 ```bash
 npm --prefix frontend install
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r backend/requirements.txt
+test -f .env || cp .env.example .env
 npm run infra:up
 npm run infra:models
 npm run db:upgrade
 npm run seed
+```
+
+Файл `.env` можно не создавать, если подходят значения по умолчанию из `.env.example`, но для локальной разработки удобнее иметь явный экземпляр.
+
+### Обычный запуск
+
+После первичной подготовки запускайте frontend и backend одной командой:
+
+```bash
 npm run dev
 ```
 
@@ -20,11 +41,24 @@ npm run dev
 
 - frontend: `http://127.0.0.1:5173`
 - backend FastAPI: `http://127.0.0.1:4000`
+- backend Swagger UI: `http://127.0.0.1:4000/docs`
 - PostgreSQL: `127.0.0.1:5432`, database `rag_service`
 - Qdrant: `http://127.0.0.1:6333`
 - Ollama: `http://127.0.0.1:11434`
 
-Если `5173` занят, Vite выберет следующий свободный порт.
+Если `5173` занят, Vite выберет следующий свободный порт и покажет его в терминале.
+Если `npm run dev` падает из-за занятого backend-порта `4000`, значит FastAPI уже запущен. В этом случае можно поднять только frontend:
+
+```bash
+npm --prefix frontend run dev -- --host 127.0.0.1
+```
+
+Если нужен только backend:
+
+```bash
+npm run backend:dev
+```
+
 Команды `npm run dev`, `npm run build` и `npm run seed` автоматически используют `.venv/bin/python`, если виртуальное окружение создано. Если нужен другой интерпретатор, задайте `PYTHON=/path/to/python`.
 Корневой `.env` подхватывается локальными скриптами автоматически.
 
@@ -76,6 +110,8 @@ Backend поддерживает реальные API для текущего fr
 
 После `npm run seed` создаётся тестовая база знаний `RAG Demo Support`. Для проверки RAG можно войти как
 `editor@ragbase.local`, открыть эту базу и спросить: `Что делать при ошибке RAG-77?` или `синий маркер Вега`.
+Также seed создаёт базу `Книга рецептов пасты` с 20 рецептами; для проверки можно спросить:
+`янтарный перец Карбонара-01` или `как приготовить спагетти карбонара`.
 
 ## Переменные окружения
 

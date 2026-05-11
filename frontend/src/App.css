@@ -528,8 +528,15 @@
   gap: 0.7rem;
 }
 
+.bases-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .bases-status,
-.kb-upload-status {
+.kb-upload-status,
+.team-status {
   color: var(--muted-foreground);
   font-size: 0.9rem;
 }
@@ -592,6 +599,7 @@
 .base-row-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
   font-size: 0.82rem;
@@ -1025,6 +1033,87 @@
   justify-content: center;
   gap: 0.75rem;
   color: var(--muted-foreground);
+}
+
+.access-denied-page {
+  width: min(34rem, calc(100% - 2rem));
+  min-height: calc(100vh - 4rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0 auto;
+}
+
+.team-sheet {
+  width: min(32rem, 100vw);
+}
+
+.team-sheet-content,
+.team-member-list,
+.team-invite-form,
+.team-member-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.team-sheet-content {
+  min-height: 0;
+  gap: 1rem;
+  padding: 0 1rem 1rem;
+  overflow: auto;
+}
+
+.team-invite-form {
+  gap: 0.75rem;
+}
+
+.team-member-list {
+  gap: 0.65rem;
+}
+
+.team-member-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--background);
+}
+
+.team-member-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.55rem;
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.team-member-main {
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.team-member-main strong,
+.team-member-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-member-main small {
+  color: var(--muted-foreground);
+}
+
+.team-role-select {
+  min-width: 7.5rem;
 }
 
 .chat-panel {

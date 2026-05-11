@@ -1,9 +1,11 @@
 export type AuthMode = 'signin' | 'signup'
+export type BaseRole = 'admin' | 'editor' | 'reader'
 
 export type CurrentUser = {
   id: string
   name: string
   email: string
+  role: BaseRole
 }
 
 export type AuthSession = {
@@ -31,9 +33,23 @@ export type KnowledgeSection = {
   updatedAt: string
 }
 
+export type KnowledgeBaseMember = {
+  userId: string
+  name: string
+  email: string
+  role: BaseRole
+  createdAt: string
+  updatedAt: string
+  isOwner: boolean
+}
+
 export type KnowledgeBase = {
   id: string
   title: string
+  ownerId: string
+  ownerName: string
+  myRole: BaseRole
+  members: KnowledgeBaseMember[]
   createdAt: string
   updatedAt: string
   sections: KnowledgeSection[]

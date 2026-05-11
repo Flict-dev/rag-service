@@ -49,6 +49,14 @@ class CreatePageRequest(BaseModel):
     title: str | None = None
 
 
+class InviteMemberRequest(BaseModel):
+    email: str | None = None
+
+
+class UpdateMemberRoleRequest(BaseModel):
+    role: UserRole | None = None
+
+
 def get_password_hasher() -> PasswordHasher:
     return PBKDF2PasswordHasher()
 
@@ -191,8 +199,14 @@ async def base_documents(
     storage: DocumentStorage = Depends(get_document_storage),
     rag_service: LocalRagService = Depends(get_rag_service),
 ) -> dict[str, list[dict[str, object]]]:
-    KnowledgeBaseUseCases(repository).get_base(base_id, user)
-    return {"documents": DocumentUseCases(repository, storage, rag_service).list_documents(user, base_id)}
+    base = KnowledgeBaseUseCases(repository).get_base(base_id, user)
+    return {
+        "documents": DocumentUseCases(repository, storage, rag_service).list_documents(
+            user,
+            base_id,
+            str(base.get("myRole") or ""),
+        )
+    }
 
 
 @router.post("/knowledge-bases/{base_id}/documents", status_code=status.HTTP_201_CREATED)
@@ -205,7 +219,7 @@ async def upload_base_document(
     storage: DocumentStorage = Depends(get_document_storage),
     rag_service: LocalRagService = Depends(get_rag_service),
 ) -> dict[str, object]:
-    KnowledgeBaseUseCases(repository).get_base(base_id, user)
+    base = KnowledgeBaseUseCases(repository).get_base(base_id, user)
     content = await file.read(MAX_DOCUMENT_UPLOAD_BYTES + 1)
     use_cases = DocumentUseCases(repository, storage, rag_service)
     result = use_cases.upload(
@@ -214,11 +228,35 @@ async def upload_base_document(
         content_type=file.content_type,
         content=content,
         knowledge_base_id=base_id,
+        base_role=str(base.get("myRole") or ""),
     )
     document = cast(dict[str, object], result["document"])
     job = cast(dict[str, object], result["job"])
     background_tasks.add_task(use_cases.run_ingestion, str(document["id"]), str(job["id"]))
     return result
+
+
+@router.post("/knowledge-bases/{base_id}/members", status_code=status.HTTP_201_CREATED)
+async def invite_knowledge_base_member(
+    base_id: str,
+    payload: InviteMemberRequest,
+    user: User = Depends(require_user),
+    repository: KnowledgeRepository = Depends(get_repository),
+) -> dict[str, dict[str, object]]:
+    member = KnowledgeBaseUseCases(repository).invite_member(base_id, payload.email, user)
+    return {"member": member}
+
+
+@router.patch("/knowledge-bases/{base_id}/members/{user_id}")
+async def update_knowledge_base_member_role(
+    base_id: str,
+    user_id: str,
+    payload: UpdateMemberRoleRequest,
+    user: User = Depends(require_user),
+    repository: KnowledgeRepository = Depends(get_repository),
+) -> dict[str, dict[str, object]]:
+    member = KnowledgeBaseUseCases(repository).update_member_role(base_id, user_id, payload.role, user)
+    return {"member": member}
 
 
 @router.post("/knowledge-bases/{base_id}/ask")
