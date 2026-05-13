@@ -1,0 +1,15 @@
+.git
+.venv
+node_modules
+frontend/node_modules
+frontend/dist
+backend/__pycache__
+backend/**/*.pyc
+backend/**/__pycache__
+backend/data
+output
+.env
+.env.*
+!.env.example
+AGENTS.md
+*.docx

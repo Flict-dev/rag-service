@@ -15,6 +15,13 @@ def _read_int(name: str, default: int) -> int:
         return default
 
 
+def _read_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
 class Settings(BaseModel):
     host: str = Field(default_factory=lambda: os.getenv("HOST", "127.0.0.1"))
     port: int = Field(default_factory=lambda: _read_int("PORT", 4000))
@@ -34,6 +41,7 @@ class Settings(BaseModel):
     ollama_chat_model: str = Field(default_factory=lambda: os.getenv("OLLAMA_CHAT_MODEL", "qwen3:4b"))
     ollama_embed_model: str = Field(default_factory=lambda: os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma"))
     rag_top_k: int = Field(default_factory=lambda: _read_int("RAG_TOP_K", 4))
+    rag_min_score: float = Field(default_factory=lambda: _read_float("RAG_MIN_SCORE", 0.35))
 
     @property
     def allowed_origins(self) -> list[str]:

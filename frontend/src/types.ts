@@ -74,12 +74,6 @@ export type CreateTarget =
       type: 'section'
     }
 
-export type NavItem = {
-  label: string
-  sectionId?: string
-  opensBases?: boolean
-}
-
 export type DocumentStatus = 'queued' | 'processing' | 'indexed' | 'failed'
 export type IngestionJobStatus = 'queued' | 'processing' | 'completed' | 'failed'
 

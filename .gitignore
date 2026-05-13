@@ -58,9 +58,10 @@ out/
 dist/
 build/
 .turbo/
-
+/output
 # Logs
 *.log
+*.docx
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

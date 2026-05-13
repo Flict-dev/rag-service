@@ -59,6 +59,51 @@ npm --prefix frontend run dev -- --host 127.0.0.1
 npm run backend:dev
 ```
 
+### Запуск всего стека в Docker Compose
+
+Backend, frontend и локальная инфраструктура также собираются одним Compose-файлом. Проектный npm-скрипт сам выберет доступную команду `docker compose` или `docker-compose`:
+
+```bash
+npm run docker:up
+```
+
+Напрямую через Docker Compose:
+
+```bash
+docker compose up --build
+# или, если установлен standalone Compose:
+docker-compose up --build
+```
+
+После старта будут доступны:
+
+- frontend: `http://127.0.0.1:5173`
+- backend FastAPI: `http://127.0.0.1:4000`
+- backend Swagger UI: `http://127.0.0.1:4000/docs`
+- PostgreSQL: `127.0.0.1:5432`
+- Qdrant: `http://127.0.0.1:6333`
+- Ollama: `http://127.0.0.1:11434`
+
+Backend внутри Docker сам применяет Alembic-миграции перед запуском. Демо-данные вынесены в отдельную команду, потому что seed очищает таблицы перед заполнением:
+
+```bash
+npm run docker:seed
+```
+
+Напрямую через Docker Compose:
+
+```bash
+docker compose --profile tools run --rm seed
+# или:
+docker-compose --profile tools run --rm seed
+```
+
+Модели Ollama по-прежнему нужно загрузить один раз:
+
+```bash
+npm run infra:models
+```
+
 Команды `npm run dev`, `npm run build` и `npm run seed` автоматически используют `.venv/bin/python`, если виртуальное окружение создано. Если нужен другой интерпретатор, задайте `PYTHON=/path/to/python`.
 Корневой `.env` подхватывается локальными скриптами автоматически.
 
@@ -66,6 +111,8 @@ npm run backend:dev
 
 ```bash
 npm run dev
+npm run docker:up
+npm run docker:seed
 npm run build
 npm run seed
 npm run infra:up
@@ -77,6 +124,8 @@ npm run test:backend
 ```
 
 - `dev` запускает frontend и backend вместе.
+- `docker:up` собирает и запускает frontend, backend, PostgreSQL, Qdrant и Ollama через Docker Compose.
+- `docker:seed` применяет миграции и пересоздаёт демо-данные в Docker PostgreSQL.
 - `infra:up` поднимает PostgreSQL, Qdrant и Ollama в Docker Compose.
 - `infra:models` скачивает локальные модели `qwen3:4b` и `embeddinggemma` в контейнер Ollama.
 - `infra:down` останавливает локальную инфраструктуру.
